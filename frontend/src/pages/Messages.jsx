@@ -23,6 +23,7 @@ export default function Messages() {
   });
   const endRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const loadStudents = async () => {
@@ -244,6 +245,13 @@ export default function Messages() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const loadConversation = async (student) => {
     setSelectedStudent(student);
     setLoadingMsgs(true);
@@ -438,8 +446,9 @@ export default function Messages() {
 
   return (
     <AppLayout showGreeting={false}>
-      <div style={{ display: 'flex', gap: 18, padding: 20, height: 'calc(100vh - 120px)', boxSizing: 'border-box', overflow: 'hidden' }}>
-        <div style={{ width: 320, background: '#fff', borderRadius: 8, padding: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box' }}>
+      <div className="messages-wrapper">
+        {!(isMobile && selectedStudent) && (
+          <div className="message-sidebar">
           <h3 style={{ marginTop: 0 }}>Students</h3>
           <div style={{ marginBottom: 12 }}>
             <input
@@ -460,7 +469,7 @@ export default function Messages() {
           {loadingStudents ? (
             <div>Loading students...</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto', overflowX: 'auto', boxSizing: 'border-box', paddingRight: 6 }}>
+            <div className="students-list-scroll">
               {getSortedStudents(students)
                 .filter((s) => {
                   const searchLower = searchQuery.toLowerCase();
@@ -537,19 +546,25 @@ export default function Messages() {
               }).length === 0 && <div className="text-muted">No students found.</div>}
             </div>
           )}
-        </div>
+          </div>
+        )}
 
-        <div style={{ flex: 1, height: '100%', background: '#fff', borderRadius: 8, padding: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ borderBottom: '1px solid #f0f0f0', paddingBottom: 8, marginBottom: 8 }}>
-            <h3 style={{ margin: 0 }}>{selectedStudent ? (selectedStudent.fullName || selectedStudent.name) : 'Select a student'}</h3>
-            <div style={{ fontSize: 13, color: '#666' }}>{selectedStudent ? (selectedStudent.email || selectedStudent.phone) : 'Click a student to open conversation'}</div>
+        <div className="message-main">
+          <div className="message-main-header">
+            {isMobile && selectedStudent && (
+              <button className="mobile-back" onClick={() => setSelectedStudent(null)}>← Back</button>
+            )}
+            <div className="message-main-title">
+              <h3 style={{ margin: 0 }}>{selectedStudent ? (selectedStudent.fullName || selectedStudent.name) : 'Select a student'}</h3>
+              <div style={{ fontSize: 13, color: '#666' }}>{selectedStudent ? (selectedStudent.email || selectedStudent.phone) : 'Click a student to open conversation'}</div>
+            </div>
           </div>
 
-          <div style={{ flex: 1, padding: 8, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="message-main-body">
             {loadingMsgs ? (
               <div>Loading messages...</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, overflowY: 'auto', paddingRight: 8 }}>
+              <div className="messages-scroll">
                 {messages.map((m, idx) => (
                   <div key={idx} style={{ alignSelf: m.sender === 'me' ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column', alignItems: m.sender === 'me' ? 'flex-end' : 'flex-start' }}>
                     {editingId === idx ? (
@@ -628,7 +643,7 @@ export default function Messages() {
           </div>
 
           {attachedFiles.length > 0 && (
-            <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 8, padding: 8, background: '#f9f9f9', borderRadius: 8 }}>
+            <div className="attached-files-preview">
               {attachedFiles.map((file) => (
                 <div key={file.id} style={{ position: 'relative', display: 'inline-block' }}>
                   {file.type.startsWith('image/') ? (
@@ -652,14 +667,14 @@ export default function Messages() {
             </div>
           )}
 
-          <form onSubmit={handleSend} style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder={selectedStudent ? `Message ${selectedStudent.fullName || 'student'}` : 'Select a student to message'} style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd' }} disabled={!selectedStudent} />
+          <form onSubmit={handleSend} className="message-send-form">
+            <input value={input} onChange={e => setInput(e.target.value)} placeholder={selectedStudent ? `Message ${selectedStudent.fullName || 'student'}` : 'Select a student to message'} className="message-input" disabled={!selectedStudent} />
             <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf" onChange={handleAttachFile} style={{ display: 'none' }} />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               title="Attach file"
-              style={{ padding: '10px 12px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 8, cursor: 'pointer', fontSize: 16 }}
+              className="attach-btn"
             >
               📎
             </button>
