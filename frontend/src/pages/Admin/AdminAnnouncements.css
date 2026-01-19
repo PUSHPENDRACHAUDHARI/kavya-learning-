@@ -1,0 +1,535 @@
+.admin-announcements-page {
+  padding: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.admin-announcements-page h2 {
+  margin: 0 0 16px 0;
+  font-size: 22px;
+}
+
+.chatbox-container {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  overflow: hidden;
+}
+
+/* Messages Display Area */
+.messages-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.no-messages {
+  color: #999;
+  text-align: center;
+  margin: auto;
+  font-size: 14px;
+}
+
+.message {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.admin-message {
+  background: #e3f2fd;
+  border-color: #2196F3;
+  margin-left: auto;
+  max-width: 70%;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.admin-badge {
+  background: #2196F3;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.message-time {
+  color: #666;
+  font-size: 11px;
+}
+
+.delete-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.delete-btn:hover {
+  color: #f44336;
+}
+
+.message-text {
+  color: #333;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.message-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #ddd;
+}
+
+.message-video {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #ddd;
+}
+
+.message-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #ddd;
+}
+
+.file-icon {
+  font-size: 20px;
+}
+
+.file-info {
+  flex: 1;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #333;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+
+/* Input Area */
+.input-area {
+  padding: 12px;
+  border-top: 1px solid #e0e0e0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 14px;
+  resize: none;
+  transition: border-color 0.2s;
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.input-image-preview {
+  position: relative;
+  width: fit-content;
+  max-width: 120px;
+}
+
+.input-image-preview img {
+  max-width: 120px;
+  max-height: 100px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.input-video-preview {
+  position: relative;
+  width: fit-content;
+  max-width: 200px;
+}
+
+.input-video-preview video {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.input-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  position: relative;
+}
+
+.remove-preview-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.remove-preview-btn:hover {
+  background: #da190b;
+}
+
+.input-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.file-upload-label {
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.file-upload-label:hover {
+  background: #efefef;
+}
+
+.send-btn {
+  flex: 1;
+  padding: 8px 16px;
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #1976D2;
+}
+
+.send-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .chatbox-container {
+    height: 500px;
+  }
+
+  .admin-message {
+    max-width: 85%;
+  }
+
+  .input-controls {
+    flex-direction: column;
+  }
+
+  .send-btn {
+    width: 100%;
+  }
+}
+
+.saved {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .announcement-section { padding: 12px; }
+}
+
+/* Edit Button and Actions */
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  color: #2196F3;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.edit-btn:hover {
+  color: #1976D2;
+}
+
+.edited-label {
+  color: #999;
+  font-size: 11px;
+  margin-left: 4px;
+  font-style: italic;
+}
+
+/* Edit Modal Styles */
+.edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.edit-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: auto;
+}
+
+.edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.edit-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.modal-close-btn:hover {
+  color: #333;
+}
+
+.edit-modal-content {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s;
+}
+
+.edit-textarea:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.edit-image-preview {
+  position: relative;
+  width: fit-content;
+}
+
+.edit-image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.edit-video-preview {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.edit-video-preview video {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.edit-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  position: relative;
+}
+
+.edit-file-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-modal-footer {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+  justify-content: flex-end;
+}
+
+.btn-cancel,
+.btn-save {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.btn-cancel:hover {
+  background: #e0e0e0;
+}
+
+.btn-save {
+  background: #2196F3;
+  color: white;
+}
+
+.btn-save:hover:not(:disabled) {
+  background: #1976D2;
+}
+
+.btn-save:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Dark mode styles - Admin Announcements chat text in black for visibility */
+.dark .admin-announcements-page h2 {
+  color: #000000 !important;
+}
+
+.dark .admin-message {
+  background: #e3f2fd;
+  border-color: #2196F3;
+}
+
+.dark .message-text {
+  color: #000000 !important;
+}
+
+.dark .message-header {
+  color: #000000 !important;
+}
+
+.dark .message-time {
+  color: #333333 !important;
+}
+
+.dark .file-name {
+  color: #000000 !important;
+}
+
+.dark .no-messages {
+  color: #333333 !important;
+}
+
+.dark .loading,
+.dark .error-message {
+  color: #000000 !important;
+}

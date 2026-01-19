@@ -1,0 +1,11 @@
+{
+  "name": "kavyalearn-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev --prefix backend\" \"npm:dev --prefix Frontend-Kavya-Learn\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

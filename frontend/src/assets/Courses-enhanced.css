@@ -1,0 +1,177 @@
+/* Enhanced Button Styles for Start/Locked/Watched Lessons */
+
+/* Base button styles - used for all lesson action buttons */
+.lesson-action,
+.lesson-action1 {
+  background: linear-gradient(135deg, #ffffff, #f8fbfd);
+  color: #0b63a5;
+  border: 1.5px solid #d0dfe8;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(11, 99, 165, 0.08);
+  letter-spacing: 0.3px;
+}
+
+/* Start button - enabled state */
+.lesson-action:not(:disabled),
+.lesson-action1:not(:disabled) {
+  background: linear-gradient(135deg, #f0f8ff, #ffffff);
+  border-color: #a8d5f7;
+}
+
+/* Start button - hover state */
+.lesson-action:hover:not(:disabled),
+.lesson-action1:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0b63a5, #0a5a93);
+  color: #ffffff;
+  border-color: #0b63a5;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(11, 99, 165, 0.25);
+}
+
+/* Start button - active/focus state */
+.lesson-action:active:not(:disabled),
+.lesson-action1:active:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(11, 99, 165, 0.2);
+}
+
+/* Locked button - disabled state */
+.lesson-action[disabled],
+.lesson-action1[disabled] {
+  background: linear-gradient(135deg, #f5f7fa, #eff2f7);
+  color: #9fb7bd;
+  border-color: #dde5eb;
+  cursor: not-allowed;
+  opacity: 0.8;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Locked button - hover state (still disabled) */
+.lesson-action[disabled]:hover,
+.lesson-action1[disabled]:hover {
+  background: linear-gradient(135deg, #f5f7fa, #eff2f7);
+  color: #9fb7bd;
+  border-color: #dde5eb;
+  cursor: not-allowed;
+}
+
+/* Icon styling for buttons */
+.lesson-action i,
+.lesson-action1 i {
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform 0.25s ease;
+}
+
+.lesson-action:hover:not(:disabled) i,
+.lesson-action1:hover:not(:disabled) i {
+  transform: scale(1.1);
+}
+
+/* Lock icon styling */
+.lesson-action[disabled] i,
+.lesson-action1[disabled] i {
+  color: #b8c9d4;
+  opacity: 0.7;
+}
+
+/* Icon backgrounds */
+.lesson-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: linear-gradient(135deg, #e6f4ff, #f0f8ff);
+  color: #0b63a5;
+  box-shadow: 0 2px 6px rgba(11, 99, 165, 0.12);
+  transition: all 0.25s ease;
+}
+
+/* Muted circle for locked lessons */
+.muted-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: linear-gradient(135deg, #fef0f0, #faf7f7);
+  color: #c0b3b3;
+  box-shadow: 0 2px 6px rgba(192, 179, 179, 0.08);
+  transition: all 0.25s ease;
+}
+
+/* Watched icon appearance */
+.lesson-icon.watched {
+  background: linear-gradient(135deg, #e8faf5, #f0fef9);
+  color: #0bb287;
+  box-shadow: 0 2px 6px rgba(11, 178, 135, 0.15);
+}
+
+/* Play icon appearance for available lessons */
+.lesson-icon.available {
+  background: linear-gradient(135deg, #e6f4ff, #f0f8ff);
+  color: #0b63a5;
+  box-shadow: 0 2px 6px rgba(11, 99, 165, 0.15);
+}
+
+/* Text label styling */
+.lesson-action,
+.lesson-action1 {
+  text-transform: capitalize;
+  letter-spacing: 0.2px;
+}
+
+/* Accessibility - focus state */
+.lesson-action:focus,
+.lesson-action1:focus {
+  outline: 2px solid #0b63a5;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+@media (prefers-reduced-motion: no-preference) {
+  .lesson-action,
+  .lesson-action1 {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .lesson-action i,
+  .lesson-action1 i {
+    transition: transform 0.25s ease;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .lesson-action,
+  .lesson-action1 {
+    padding: 8px 12px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+  
+  .lesson-action i,
+  .lesson-action1 i {
+    font-size: 15px;
+  }
+  
+  .lesson-icon,
+  .muted-circle {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+}

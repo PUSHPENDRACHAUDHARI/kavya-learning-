@@ -1,0 +1,71 @@
+.parent-dashboard {
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #cfe6f5 100%);
+  min-height: calc(100vh - 60px);
+}
+
+.welcome-section {
+  margin-bottom: 18px;
+  color: #2b6cb0;
+}
+
+.welcome-section h1 {
+  font-size: 24px;
+  margin: 0 0 8px 0;
+}
+
+.welcome-section p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card-plain {
+  background: linear-gradient(90deg,#2b6cb0,#37afac);
+  color: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 6px 16px rgba(43,108,176,0.12);
+}
+
+.stat-card-plain h3{margin:0;font-size:20px}
+.stat-card-plain p{margin:0;font-size:13px;opacity:0.95}
+
+.progress-section {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.progress-card {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.progress-label {display:flex;justify-content:space-between;margin-bottom:8px;font-weight:600;color:#333}
+.progress-bar{background:#e9ecef;border-radius:10px;height:12px;overflow:hidden}
+.progress-fill{background:linear-gradient(90deg,#2b6cb0,#37afac);height:100%;border-radius:10px;transition:width .3s}
+
+.quick-actions{margin-bottom:20px}
+.quick-actions h2{margin:0 0 12px 0;color:#333}
+.actions-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+.action-button{background:white;border:2px solid #2b6cb0;border-radius:10px;padding:12px 10px;text-align:center;text-decoration:none;color:#2b6cb0;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:8px}
+
+.recommendation-card{background:white;border-radius:12px;padding:14px;box-shadow:0 4px 12px rgba(0,0,0,0.06);border-left:5px solid #2b6cb0}
+
+@media (max-width:980px){
+  .stats-grid{grid-template-columns:repeat(1,1fr)}
+}

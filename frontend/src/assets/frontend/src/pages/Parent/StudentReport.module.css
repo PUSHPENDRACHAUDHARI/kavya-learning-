@@ -1,0 +1,226 @@
+/* ---------------- PAGE LAYOUT ---------------- */
+
+.container {
+  margin-left: 260px;              /* Prevent overlap with sidebar */
+  padding: 32px 40px;
+  min-height: 100vh;
+  background: #f4f7fb;
+  box-sizing: border-box;
+}
+
+.title {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: #222;
+}
+
+/* Wraps left card + right panel */
+.layout {
+  display: flex;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;                  /* Center horizontally */
+  width: 100%;
+}
+
+/* ---------------- LEFT PANEL ---------------- */
+
+.leftCardWrap {
+  width: 320px;
+  flex-shrink: 0;
+}
+
+.card {
+  background: #fff;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid #e6e6e6;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Buttons */
+.linkButton {
+  background: #28a745;
+  color: white;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.linkButton:hover {
+  background: #22963b;
+}
+
+.showButton {
+  width: 100%;
+  padding: 10px;
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.showButton:disabled {
+  background: #6faef6;
+}
+
+/* Student list */
+.studentList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.studentItem {
+  padding: 10px;
+  background: #f7f9fc;
+  border: 1px solid #dfe4ec;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  transition: 0.2s;
+}
+
+.studentItem:hover {
+  background: #eaf2ff;
+}
+
+.studentItemActive {
+  background: #d9e9ff;
+  border-color: #b9d6ff;
+}
+
+.studentMeta {}
+
+.studentName {
+  font-weight: 600;
+}
+
+.studentEmail {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Unlink button */
+.unlinkButton {
+  background: transparent;
+  border: 1px solid #d9534f;
+  color: #d9534f;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.unlinkButton:hover {
+  background: #ffe7e7;
+}
+
+/* Input field */
+.input {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* ---------------- RIGHT PANEL ---------------- */
+
+.rightPanel {
+  flex: 1;
+}
+
+.dashedBox {
+  border: 2px dashed #cfcfcf;
+  padding: 40px 20px;
+  border-radius: 12px;
+  text-align: center;
+  background: white;
+  color: #777;
+  font-size: 1rem;
+}
+
+.reportCard {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e6e6e6;
+  padding: 22px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+/* ---------------- ERROR ---------------- */
+
+.error {
+  background: #ffdddd;
+  color: #b30000;
+  padding: 12px;
+  text-align: center;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #ffb3b3;
+}
+
+/* ---------------- TOAST ---------------- */
+
+.toast {
+  position: fixed;
+  bottom: 25px;
+  right: 30px;
+  padding: 14px 22px;
+  background: #333;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease;
+}
+
+.toastSuccess {
+  background: #28a745;
+}
+
+.toastError {
+  background: #d9534f;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------------- RESPONSIVE ---------------- */
+
+@media (max-width: 950px) {
+  .layout {
+    flex-direction: column;
+  }
+  .leftCardWrap {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .container {
+    margin-left: 0;        /* sidebar collapses in mobile */
+    padding: 20px;
+  }
+  .title {
+    font-size: 1.4rem;
+  }
+}

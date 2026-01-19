@@ -1,0 +1,314 @@
+/* Dark-mode override: force all admin panel pages text to black */
+.dark [role="main"],
+.dark .container,
+.dark .container-fluid,
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6,
+.dark p,
+.dark span,
+.dark a,
+.dark label,
+.dark legend,
+.dark th,
+.dark td,
+.dark .card,
+.dark .card-header,
+.dark .card-body,
+.dark .card-footer,
+.dark .table,
+.dark .table thead,
+.dark .table tbody,
+.dark .table tfoot,
+.dark .btn,
+.dark .form-control,
+.dark .form-select,
+.dark .form-check-label,
+.dark .input-group,
+.dark .input-group-text,
+.dark .nav,
+.dark .navbar,
+.dark .navbar-brand,
+.dark .nav-link,
+.dark .dropdown-menu,
+.dark .dropdown-item,
+.dark .modal-header,
+.dark .modal-body,
+.dark .modal-footer,
+.dark .modal-title,
+.dark .alert,
+.dark .badge,
+.dark .breadcrumb,
+.dark .breadcrumb-item,
+.dark .pagination,
+.dark .page-link,
+.dark .list-group-item,
+.dark .progress-bar,
+.dark .spinner-border,
+.dark .spinner-grow,
+.dark .toast-header,
+.dark .toast-body,
+.dark .offcanvas-header,
+.dark .offcanvas-body,
+.dark .carousel-caption,
+.dark .placeholder,
+.dark .ratio,
+.dark .embed-responsive {
+  color: #000 !important;
+}
+
+/* Ensure text in form elements remains black */
+.dark .form-control::placeholder,
+.dark .form-select,
+.dark textarea.form-control {
+  color: #000 !important;
+}
+
+/* Table text override */
+.dark .table {
+  color: #000 !important;
+}
+
+.dark .table th,
+.dark .table td {
+  color: #000 !important;
+  border-color: #ddd;
+}
+
+/* Button text override */
+.dark .btn-primary,
+.dark .btn-secondary,
+.dark .btn-success,
+.dark .btn-danger,
+.dark .btn-warning,
+.dark .btn-info,
+.dark .btn-light,
+.dark .btn-dark {
+  color: #000 !important;
+}
+
+/* Modal content override */
+.dark .modal-content {
+  color: #000 !important;
+  background-color: #fff;
+}
+
+/* Dropdown menu text override */
+.dark .dropdown-menu {
+  background-color: #fff;
+}
+
+.dark .dropdown-item {
+  color: #000 !important;
+}
+
+/* Ensure delete buttons (danger) have white text in admin dark mode */
+.dark .btn-danger,
+.dark button.btn-danger,
+.dark .table .btn-danger {
+  color: #fff !important;
+}
+
+/* Manage Students page: Add Student button and form text should be white in dark mode */
+.dark .admin-students-page .btn-primary,
+.dark .admin-students-page button.btn-primary {
+  color: #fff !important;
+  background-color: #000 !important;
+  border-color: #000 !important;
+}
+
+.dark .admin-students-page .form-control,
+.dark .admin-students-page .form-label,
+.dark .admin-students-page label,
+.dark .admin-students-page .form-check-label,
+.dark .admin-students-page .modal-panel,
+.dark .admin-students-page h3,
+.dark .admin-students-page h5 {
+  color: #fff !important;
+}
+
+.dark .admin-students-page .form-control::placeholder {
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* Close button in Manage Students Add form should show white text in dark mode */
+.dark .admin-students-page .btn-secondary,
+.dark .admin-students-page button.btn-secondary {
+  color: #fff !important;
+}
+
+/* Alert text override */
+.dark .alert-primary,
+.dark .alert-secondary,
+.dark .alert-success,
+.dark .alert-danger,
+.dark .alert-warning,
+.dark .alert-info,
+.dark .alert-light,
+.dark .alert-dark {
+  color: #000 !important;
+}
+
+/* Nav/navbar text override */
+.dark .nav-link {
+  color: #000 !important;
+}
+
+.dark .navbar-text {
+  color: #000 !important;
+}
+
+/* Add Course form in Admin: in dark mode text should be white */
+.dark .add-course-panel,
+.dark .add-course-panel h1,
+.dark .add-course-panel h2,
+.dark .add-course-panel h3,
+.dark .add-course-panel h4,
+.dark .add-course-panel h5,
+.dark .add-course-panel h6,
+.dark .add-course-panel p,
+.dark .add-course-panel span,
+.dark .add-course-panel a,
+.dark .add-course-panel label,
+.dark .add-course-panel .form-control,
+.dark .add-course-panel input,
+.dark .add-course-panel textarea,
+.dark .add-course-panel select,
+.dark .add-course-panel .btn {
+  color: #fff !important;
+}
+
+/* Placeholder readability */
+.dark .add-course-panel ::placeholder {
+  color: rgba(255,255,255,0.8) !important;
+}
+
+/* Admin heading style: white background with dark text in dark mode */
+.dark .admin-heading {
+  background: #ffffff !important;
+  color: #000 !important;
+  padding: 0.35rem 0.6rem !important;
+  border-radius: 6px !important;
+  display: inline-block !important;
+}
+
+/* Profile page: page text black in admin dark mode, except edit form stays white */
+.dark .profile-page,
+.dark .profile-page .profile-main,
+.dark .profile-page .profile-name,
+.dark .profile-page .profile-stat-card,
+.dark .profile-page .profile-bio,
+.dark .profile-page .profile-contacts,
+.dark .profile-page .contact-item,
+.dark .profile-page .activity-text {
+  color: #000 !important;
+}
+
+/* Keep edit form inputs/labels white for readability */
+.dark .profile-page .edit-form,
+.dark .profile-page .edit-form label,
+.dark .profile-page .edit-form .form-label,
+.dark .profile-page .edit-form input,
+.dark .profile-page .edit-form textarea,
+.dark .profile-page .edit-form select {
+  color: #fff !important;
+}
+
+.dark .profile-page .edit-form input::placeholder,
+.dark .profile-page .edit-form textarea::placeholder {
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* Profile icons (Mail, Phone, MapPin, Calendar) should be black in admin dark mode */
+.dark .profile-page .profile-contacts .contact-item svg,
+.dark .profile-page .profile-contacts .contact-item svg * {
+  stroke: #000 !important;
+  fill: #000 !important;
+  color: #000 !important;
+}
+
+/* Catch any lucide/react icon classes */
+.dark .profile-page .profile-contacts .contact-item .lucide,
+.dark .profile-page .profile-contacts .contact-item .lucide * {
+  stroke: #000 !important;
+  fill: #000 !important;
+  color: #000 !important;
+}
+
+/* Schedule page: make Add Event / Previous / Next buttons white in admin dark mode */
+.dark .container-fluid .btn-event,
+.dark .schedule-card .btn-event,
+.dark .container-fluid .btn-sm.btn-light,
+.dark .schedule-card .btn-sm.btn-light,
+.dark .schedule-card .btn-light {
+  color: #fff !important;
+  background-color: #000 !important;
+  border-color: #000 !important;
+}
+
+/* Ensure icons inside those buttons are white */
+.dark .container-fluid .btn-event svg,
+.dark .schedule-card .btn-event svg,
+.dark .container-fluid .btn-sm.btn-light svg,
+.dark .schedule-card .btn-sm.btn-light svg,
+.dark .schedule-card .btn-light svg {
+  stroke: #fff !important;
+  fill: #fff !important;
+  color: #fff !important;
+}
+
+/* Admin Dashboard summary cards: white background in dark mode */
+.dark .cards .card,
+.dark .cards .card.p-3 {
+  background: #ffffff !important;
+  color: #000 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06) !important;
+}
+
+/* Header section text should be white in dark mode */
+.dark .header-wrapper,
+.dark .header-wrapper .header-title,
+.dark .header-wrapper .header-left,
+.dark .header-wrapper .header-right,
+.dark .header-wrapper h1,
+.dark .header-wrapper h2,
+.dark .header-wrapper h3,
+.dark .header-wrapper h4,
+.dark .header-wrapper h5,
+.dark .header-wrapper h6,
+.dark .header-wrapper p,
+.dark .header-wrapper span,
+.dark .header-wrapper a,
+.dark .header-wrapper label,
+.dark .header-wrapper .btn {
+  color: #fff !important;
+}
+
+/* Free Course button text should be white in admin dark mode */
+.dark .admin-students-page button:has(+ *)::after,
+.dark td button {
+  color: #fff !important;
+}
+
+/* More specific rule for Free Course button in table */
+.dark .table tbody tr td button[type="button"] {
+  color: #fff !important;
+}
+
+/* Target Free Courses section text specifically */
+.dark .table tbody tr td button {
+  color: #fff !important;
+}
+
+/* Admin Notes page - Upload button text should be white in dark mode */
+.dark .btn-primary {
+  color: #fff !important;
+}
+
+.dark form button.btn-primary {
+  color: #fff !important;
+}

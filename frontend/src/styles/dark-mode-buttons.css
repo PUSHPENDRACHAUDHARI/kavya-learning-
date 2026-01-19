@@ -1,0 +1,10 @@
+/* Dark mode: Upcoming classes button should be white */
+.dark .class-item button {
+  background: #2b6cb0 !important;
+  color: #ffffff !important;
+}
+
+.dark .class-item button:hover {
+  background: #1f5a8a !important;
+  color: #ffffff !important;
+}

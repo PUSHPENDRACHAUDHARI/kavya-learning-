@@ -1,0 +1,81 @@
+:root{
+  --bg:#fff;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+  --accent:#2563eb;
+}
+
+.page{
+  display:grid;
+  grid-template-columns: 1fr 320px;
+  gap:20px;
+  padding:18px;
+
+}
+
+.content{
+  width:100%;
+  max-width:1000px; /* center main content area */
+  margin:0 auto;
+  box-sizing:border-box;
+}
+
+.header{
+  grid-column: 1 / -1;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.title{margin:0;font-size:20px}
+.sub{margin:0;color:var(--muted)}
+
+.statsRow{
+  grid-column: 1 / -1;
+  display:flex;
+  gap:12px;
+}
+.card{
+  flex:1;
+  background:var(--bg);
+  border:1px solid var(--border);
+  padding:12px;
+  border-radius:8px;
+  min-height:72px;
+}
+.cardLabel{font-size:12px;color:var(--muted)}
+.cardValue{font-size:20px;font-weight:700;margin-top:6px}
+
+.childrenSection{
+  grid-column: 1 / 2;
+}
+.sectionTitle{margin:8px 0 12px}
+.childrenGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.childCard{border:1px solid var(--border);padding:14px;border-radius:8px;background:#fff;display:flex;flex-direction:column;gap:10px}
+.childMeta{display:flex;flex-direction:column}
+.childName{font-weight:700}
+.childClass{color:var(--muted);font-size:12px}
+.progressWrap{display:flex;align-items:center;gap:10px}
+.progressBar{flex:1;height:10px;background:#f3f4f6;border-radius:999px;overflow:hidden}
+.progressFill{height:100%;background:linear-gradient(90deg,var(--accent),#06b6d4)}
+.progressLabel{font-size:12px;color:var(--muted);width:72px}
+.progressPct{font-weight:700}
+.childMetaBottom{display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+.cardActions{display:flex;justify-content:flex-end}
+.viewBtn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:6px;border:none;cursor:pointer}
+
+.sideSection{grid-column:2/3;border:1px solid var(--border);padding:12px;border-radius:8px;height:min-content}
+.notificationsList, .eventsList{list-style:none;padding-left:0;margin:0;display:flex;flex-direction:column;gap:10px}
+.noteText{color:var(--muted);font-size:13px}
+.noteTime{font-size:12px;color:#9ca3af}
+.empty{color:var(--muted);padding:12px;border:1px dashed var(--border);border-radius:6px}
+
+.loading{padding:18px;color:var(--muted)}
+.error{padding:18px;color:#b91c1c}
+
+@media (max-width: 980px){
+  .page{grid-template-columns: 1fr;}
+  .sideSection{order:3}
+  .childrenSection{order:2}
+  .statsRow{flex-direction:column}
+}

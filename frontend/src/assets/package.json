@@ -1,0 +1,11 @@
+{
+  "name": "kavyalearn-root",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "start": "bash start.sh"
+  }
+}

@@ -1,0 +1,214 @@
+body {
+  background-color: #f5f7fa;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+}
+
+.schedule-card {
+  background: #c9efec;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #f1f3f5;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+.calendar-day.active {
+  background: #2b6cb0;
+  color: white;
+}
+
+.class-card {
+  border-left: 4px solid #2b6cb0;
+  /* background: white; */
+  background: rgb(225, 245, 251);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.highlighted-reminder {
+  animation: highlightPulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
+  border-left-color: #2563eb;
+  border: 2px solid rgba(37,99,235,0.12);
+}
+
+@keyframes highlightPulse {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+  100% { transform: translateY(0); }
+}
+
+.schedule-badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.today-event {
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  color: white;
+  font-weight: 500;
+}
+
+/* Simple modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+
+.modal-panel {
+  width: 100%;
+  max-width: 680px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 90vh;
+}
+
+.btn-color {
+  border-radius: 10px;
+  background-color: #2a69aa;
+  color: white;
+}
+.btn-color:hover {
+  background-color: #1a365d;
+  color: white;
+}
+
+.btn-reminder {
+  border-radius: 10px;
+  background-color: #edf2f7;
+  color: #2f302f;
+}
+
+/* ✅ Responsive adjustments */
+@media (max-width: 992px) {
+  .schedule-card {
+    padding: 16px !important;
+  }
+
+  .class-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .schedule-card {
+    margin-bottom: 16px;
+  }
+
+  .d-flex.justify-content-between.align-items-center {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+
+  .btn.btn-primary.d-flex.align-items-center.gap-2 {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .calendar-day {
+    font-size: 0.75rem;
+    border-radius: 6px;
+  }
+
+  .row.g-2 > .col {
+    flex: 1 1 calc(14.28% - 4px);
+  }
+
+  /* Add Event Modal responsiveness */
+  .modal-panel {
+    width: 90%;
+    padding: 16px;
+  }
+
+  .modal-panel form .row.g-3 {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modal-panel form .col-md-6,
+  .modal-panel form .col-md-3,
+  .modal-panel form .col-12 {
+    width: 100% !important;
+  }
+
+  .d-flex.justify-content-end.gap-2 {
+    flex-direction: column;
+  }
+
+  .d-flex.justify-content-end.gap-2 button {
+    width: 100%;
+  }
+
+  .today-event {
+    padding: 12px;
+  }
+}
+
+.btn-event {
+  background-color: #2b6cb0;
+  color: white;
+}
+.btn-event:hover {
+  background-color: #1a365d;
+  color: white;
+}
+.btn-modal {
+  background-color: #2b6cb0;
+  color: white;
+}
+.btn-modal:hover {
+  background-color: #1a365d;
+  color: white;
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.5rem !important;
+  }
+
+  .schedule-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background-color: #6b839b;
+  }
+
+  .modal-panel {
+    width: 95%;
+    padding: 12px;
+  }
+
+  .modal-panel h5 {
+    font-size: 1rem;
+  }
+
+  .modal-panel label {
+    font-size: 0.85rem;
+  }
+}

@@ -1,0 +1,10 @@
+/* Dark mode button styling for upcoming classes */
+.dark .class-item button {
+  background: #2b6cb0 !important;
+  color: #ffffff !important;
+}
+
+.dark .class-item button:hover {
+  background: #1f5a8a !important;
+  color: #ffffff !important;
+}

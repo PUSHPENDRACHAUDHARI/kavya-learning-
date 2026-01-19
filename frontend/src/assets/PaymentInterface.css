@@ -1,0 +1,611 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.checkout-container {
+  min-height: 100vh;
+  background-color: #f9fafb;
+  padding: 32px 16px;
+}
+
+.checkout-wrapper {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.back-button {
+  margin-bottom: 32px;
+  padding: 8px 16px;
+  background-color: #e5e7eb;
+  color: #374151;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.back-button:hover {
+  background-color: #d1d5db;
+}
+
+.checkout-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 1024px) {
+  .checkout-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Payment Section */
+.payment-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.payment-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 24px 32px;
+}
+
+.payment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.payment-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.secure-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.lock-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Payment Options */
+.payment-option {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.payment-option.mobile-wallets-option {
+  margin-top: 24px;
+}
+
+.payment-option:hover {
+  border-color: #9ca3af;
+}
+
+.payment-option.active-option {
+  border-color: #3b82f6;
+  background-color: #f0f9ff;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  width: 100%;
+}
+
+.option-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.radio-input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #a855f7;
+}
+
+.option-icon {
+  width: 20px;
+  height: 20px;
+  color: #374151;
+  flex-shrink: 0;
+}
+
+.option-icon.bank-icon {
+  color: #374151;
+}
+
+.option-text {
+  font-weight: 500;
+  color: #111827;
+}
+
+.option-text-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-subtext {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Card Logos */
+.card-logos {
+  display: flex;
+  gap: 8px;
+}
+
+.logo-payment {
+  width: 40px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: bold;
+}
+
+.visa-logo {
+  background-color: #1e40af;
+  color: white;
+}
+
+.mastercard-logo {
+  background: linear-gradient(135deg, #eb6f0a 0%, #f42222 100%);
+}
+
+.amex-logo {
+  background-color: #1e40af;
+  color: white;
+}
+
+.rupay-logo {
+  background-color: #1e3a8a;
+  color: white;
+}
+
+/* Card Form */
+.card-form {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Wallet Options */
+.wallet-options {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: white;
+}
+
+.wallet-option:hover {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+.wallet-option.selected {
+  border-color: #3b82f6;
+  background-color: #f0f9ff;
+}
+
+.wallet-logo {
+  width: 48px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+}
+
+.googlepay-logo {
+  background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+}
+
+.phonepe-logo {
+  background: linear-gradient(135deg, #5f259f 0%, #7c3aed 100%);
+}
+
+.paytm-logo {
+  background: linear-gradient(135deg, #00baf2 0%, #002970 100%);
+}
+
+.wallet-name {
+  font-weight: 500;
+  color: #111827;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input::placeholder {
+  color: #9ca3af;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Summary Section */
+.summary-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  position: sticky;
+  top: 32px;
+}
+
+@media (max-width: 1024px) {
+  .summary-card {
+    position: static;
+  }
+}
+
+.summary-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 24px;
+}
+
+.price-details {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.price-label {
+  color: #6b7280;
+}
+
+.price-value {
+  color: #111827;
+}
+
+.price-value.discount {
+  color: #dc2626;
+}
+
+.price-divider {
+  height: 1px;
+  background-color: #e5e7eb;
+  margin: 16px 0;
+}
+
+.total-section {
+  margin-bottom: 24px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total-label {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.total-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.terms-text {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.terms-link {
+  color: #2b6cb0;
+  text-decoration: underline;
+}
+
+.terms-link:hover {
+  color: #1a365d;
+}
+
+.proceed-button {
+  width: 100%;
+  background-color: #2b6cb0;
+  color: white;
+  font-weight: 600;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  transition: background-color 0.3s ease;
+  font-size: 16px;
+}
+
+.proceed-button:hover {
+  background-color: #1a365d;
+}
+
+.button-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Success Banner */
+.success-banner {
+  background-color: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.banner-icon {
+  width: 16px;
+  height: 16px;
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.banner-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.banner-text {
+  font-size: 12px;
+  color: #6b5103;
+  line-height: 1.6;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .checkout-container {
+    padding: 16px;
+  }
+
+  .payment-card {
+    padding: 16px;
+  }
+
+  .payment-title {
+    font-size: 20px;
+  }
+
+  .summary-card {
+    padding: 16px;
+  }
+
+  .total-amount {
+    font-size: 24px;
+  }
+
+  .card-logos {
+    gap: 4px;
+  }
+
+  .logo-payment {
+    width: 32px;
+    height: 20px;
+    font-size: 7px;
+  }
+}
+
+@media (max-width: 480px) {
+  .checkout-content {
+    gap: 16px;
+  }
+
+  .payment-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .secure-badge {
+    order: 3;
+    width: 100%;
+  }
+
+  .option-label {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card-logos {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* UPI gateway buttons */
+.gateway-options {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+.gateway {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  cursor: pointer;
+  background: white;
+  color: #111827;
+  transition: all 0.2s ease;
+}
+.gateway:hover { box-shadow: 0 2px 8px rgba(16,24,40,0.06); transform: translateY(-2px); }
+.gateway.selected {
+  background: linear-gradient(90deg,#0ea5e9,#7c3aed);
+  color: white;
+  border-color: #7c3aed;
+}
+
+/* Verify button */
+.verify-button {
+  padding: 8px 12px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Modal & overlays */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 360px;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.2);
+}
+
+.success-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.success-popup {
+  background: white;
+  padding: 24px;
+  border-radius: 10px;
+  width: 360px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.2);
+}
+.success-popup h3 { color: #10b981; margin-bottom: 8px; }
+.success-check {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.success-check svg { width: 28px; height: 28px; color: #059669; }
+
