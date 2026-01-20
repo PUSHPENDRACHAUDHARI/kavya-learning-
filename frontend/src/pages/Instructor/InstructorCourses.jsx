@@ -55,6 +55,15 @@ const InstructorCourses = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Prevent special characters in category field
+    if (name === 'category') {
+      if (/[@#$%!]/.test(value)) {
+        alert('Category cannot contain special characters: @, #, $, %, !');
+        return;
+      }
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -243,8 +252,6 @@ const InstructorCourses = () => {
                 onChange={handleChange} 
                 required 
                 className="form-control"
-                pattern="[^@#$%!]*"
-                title="Category cannot contain special characters (@, #, $, %, !)"
               />
               <input 
                 type="number" 
