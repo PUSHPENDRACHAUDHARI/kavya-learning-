@@ -47,10 +47,20 @@ function LoginPage() {
         return;
       }
  
-      // Store token and user info
+      // Store token and user info (normalize gender)
+      const normalizeGender = (val) => {
+        if (!val) return "";
+        const s = String(val).trim().toLowerCase();
+        if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+        if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+        return "";
+      };
+
+      const userToStore = { ...data, gender: normalizeGender(data.gender) };
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data));
+      localStorage.setItem("user", JSON.stringify(userToStore));
       localStorage.setItem("userRole", data.role);
+      try { window.dispatchEvent(new Event('userUpdated')); } catch (e) { /* ignore */ }
       
       // Redirect based on role
       if (data.role === 'admin' || data.role === 'sub-admin') {

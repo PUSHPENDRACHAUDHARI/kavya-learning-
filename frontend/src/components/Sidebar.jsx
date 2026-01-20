@@ -10,7 +10,7 @@ import {
   LuGalleryHorizontalEnd,
 } from "react-icons/lu";
 import { TbReportAnalytics } from "react-icons/tb";
-import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement } from "react-icons/md";
+import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement, MdSettings } from "react-icons/md";
 import { MdAutoStories } from "react-icons/md";
 import { AiOutlineBook } from "react-icons/ai";
 import logo from "../assets/logo.png";
@@ -113,7 +113,7 @@ function Sidebar({ isOpen, setIsOpen }) {
       { path: "/admin/students", label: "Manage Students", icon: <LuUser /> },
       { path: "/admin/courses", label: "Manage Courses", icon: <AiOutlineBook /> },
       { path: "/admin/notes", label: "Notes", icon: <LuGalleryHorizontalEnd /> },
-      { path: "/admin/settings", label: "Admin Settings", icon: <TbReportAnalytics /> },
+      { path: "/admin/settings", label: "Admin Settings", icon: <MdSettings /> },
     ] : []),
     
     // Instructor items

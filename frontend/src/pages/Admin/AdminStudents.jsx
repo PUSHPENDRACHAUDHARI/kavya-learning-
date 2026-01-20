@@ -20,11 +20,14 @@ const AdminStudents = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
-  const [genderSort, setGenderSort] = useState("none"); // none | asc | desc
+  const [nameSort, setNameSort] = useState("none"); // none | asc | desc
 
-  const loadStudents = async () => {
+  const loadStudents = async (opts = {}) => {
     try {
-      const res = await axiosClient.get("/api/admin/users?role=student");
+      let url = "/api/admin/users?role=student";
+      if (opts.sortBy) url += `&sortBy=${encodeURIComponent(opts.sortBy)}`;
+      if (opts.sortOrder) url += `&sortOrder=${encodeURIComponent(opts.sortOrder)}`;
+      const res = await axiosClient.get(url);
 
       // Expect backend to send enrolledCourses & achievements
       setStudents(res.data.data || res.data);
@@ -38,6 +41,16 @@ const AdminStudents = () => {
   useEffect(() => {
     loadStudents();
   }, []);
+
+  // When sort order changes, request sorted data from backend (also handled client-side)
+  useEffect(() => {
+    if (!nameSort || nameSort === 'none') {
+      // reload default ordering
+      loadStudents();
+    } else {
+      loadStudents({ sortBy: 'fullName', sortOrder: nameSort });
+    }
+  }, [nameSort]);
 
   // compute filtered and sorted students with stable hook order
   const filteredStudents = useMemo(() => {
@@ -75,17 +88,17 @@ const AdminStudents = () => {
       return true;
     });
 
-    if (genderSort && genderSort !== 'none') {
+    if (nameSort && nameSort !== 'none') {
       out = out.slice().sort((a, b) => {
-        const ga = (a.gender || '').toLowerCase();
-        const gb = (b.gender || '').toLowerCase();
-        const cmp = ga.localeCompare(gb);
-        return genderSort === 'asc' ? cmp : -cmp;
+        const na = (a.fullName || '').toLowerCase();
+        const nb = (b.fullName || '').toLowerCase();
+        const cmp = na.localeCompare(nb);
+        return nameSort === 'asc' ? cmp : -cmp;
       });
     }
 
     return out;
-  }, [students, searchQuery, cityQuery, genderFilter, genderSort]);
+  }, [students, searchQuery, cityQuery, genderFilter, nameSort]);
 
   if (loading) return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading students...</div></AppLayout>;
 
@@ -173,7 +186,7 @@ const AdminStudents = () => {
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           Sort By Seq:
-          <select value={genderSort} onChange={e => setGenderSort(e.target.value)} style={{ padding: 8 }}>
+          <select value={nameSort} onChange={e => setNameSort(e.target.value)} style={{ padding: 8 }}>
             <option value="none">None</option>
             <option value="asc">A → Z</option>
             <option value="desc">Z → A</option>
@@ -211,10 +224,10 @@ const AdminStudents = () => {
                 Status:{" "}
                 <span
                   className={`badge bg-${
-                    s.status === "active" ? "success" : "danger"
+                    (s.user_status === 'Blocked' || s.status === 'inactive') ? 'danger' : 'success'
                   }`}
                 >
-                  {s.status || "active"}
+                  {s.user_status ? s.user_status : (s.status ? (s.status === 'active' ? 'Active' : 'Inactive') : 'Active')}
                 </span>
               </td>
 

@@ -165,6 +165,7 @@ const getUserProfile = async (req, res) => {
             address: formattedAddress,
             bio: user.bio || null,
             role: user.role,
+            gender: user.gender || null,
             createdAt: user.createdAt,
             avatar: user.avatar,
             streakDays: user.streakDays || 0,
@@ -183,7 +184,7 @@ const getUserProfile = async (req, res) => {
     }
 };
 
-// @desc    Update user profile (name, phone, location, bio)
+// @desc    Update user profile (name, phone, location, bio, gender)
 // @route   PUT /api/users/profile
 // @access  Private
 const updateUserProfile = async (req, res) => {
@@ -194,12 +195,14 @@ const updateUserProfile = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        const { fullName, phone, location, bio } = req.body;
+        const { fullName, phone, location, bio, gender, avatar } = req.body;
 
         if (fullName !== undefined) user.fullName = fullName;
         if (phone !== undefined) user.phone = phone;
         if (location !== undefined) user.location = location;
         if (bio !== undefined) user.bio = bio;
+        if (gender !== undefined) user.gender = gender;
+        if (avatar !== undefined) user.avatar = avatar;
 
         await user.save();
 
@@ -212,6 +215,9 @@ const updateUserProfile = async (req, res) => {
             phone: saved.phone,
             role: saved.role,
             avatar: saved.avatar,
+            gender: saved.gender,
+            bio: saved.bio,
+            location: saved.location,
             createdAt: saved.createdAt,
         });
     } catch (error) {

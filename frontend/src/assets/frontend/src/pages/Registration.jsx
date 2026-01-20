@@ -71,9 +71,19 @@ function Registration() {
         return;
       }
 
+      const normalizeGender = (val) => {
+        if (!val) return "";
+        const s = String(val).trim().toLowerCase();
+        if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+        if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+        return '';
+      };
+      const userToStore = { ...data.user, gender: normalizeGender(data.user.gender) };
       localStorage.setItem("token", data.user.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("user", JSON.stringify(userToStore));
       localStorage.setItem("role", data.user.role);
+      localStorage.setItem("userRole", data.user.role);
+      try { window.dispatchEvent(new Event('userUpdated')); } catch (e) { }
 
       navigate("/");
     } catch (err) {

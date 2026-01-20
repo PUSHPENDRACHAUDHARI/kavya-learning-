@@ -28,6 +28,16 @@ function Header({ onToggleSidebar, children }) {
     return trimmed;
   };
 
+  // Normalize gender values to canonical 'male'|'female'|''
+  const normalizeGender = (val) => {
+    if (!val) return "";
+    const s = String(val).trim().toLowerCase();
+    if (!s) return "";
+    if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+    if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+    return '';
+  };
+
   // Search state & handlers
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -685,7 +695,7 @@ function Header({ onToggleSidebar, children }) {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        const genderNormalized = (user.gender || "").toString().toLowerCase();
+        const genderNormalized = normalizeGender(user.gender);
         setUserGender(genderNormalized);
         setUserAvatar(normalizeAvatar(user.avatar));
         
@@ -752,7 +762,7 @@ function Header({ onToggleSidebar, children }) {
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
-          const genderNormalized = (user.gender || "").toString().toLowerCase();
+          const genderNormalized = normalizeGender(user.gender);
           setUserGender(genderNormalized);
           setUserAvatar(normalizeAvatar(user.avatar));
 
@@ -1023,7 +1033,7 @@ function Header({ onToggleSidebar, children }) {
                 style={{ width: "32px", height: "32px" }}
               />
             </div>
-          ) : (
+          ) : userGender === "male" ? (
             <div
               style={{
                 cursor: "pointer",
@@ -1041,6 +1051,26 @@ function Header({ onToggleSidebar, children }) {
                 src={profile}
                 alt="Male Avatar"
                 style={{ width: "32px", height: "32px" }}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                cursor: "pointer",
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={() => setShowDropdown(!showDropdown)}
+            >
+              <img
+                src={profile}
+                alt="Profile"
+                style={{ width: "32px", height: "32px", borderRadius: '50%' }}
               />
             </div>
       

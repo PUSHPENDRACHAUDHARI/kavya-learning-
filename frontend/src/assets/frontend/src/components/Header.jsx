@@ -83,9 +83,16 @@ function Header({ onToggleSidebar, children }) {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
-        const genderNormalized = (user.gender || "").toString().toLowerCase();
-        setUserGender(genderNormalized);
-        setUserAvatar(user.avatar || "");
+          const normalizeGender = (val) => {
+            if (!val) return '';
+            const s = String(val).trim().toLowerCase();
+            if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+            if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+            return '';
+          };
+          const genderNormalized = normalizeGender(user.gender);
+          setUserGender(genderNormalized);
+          setUserAvatar(user.avatar || "");
         
         // Generate initials: get first char of first and last name, or first 2 chars if single word
         const fullName = (user.fullName || "").trim();
@@ -150,7 +157,14 @@ function Header({ onToggleSidebar, children }) {
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
-          const genderNormalized = (user.gender || "").toString().toLowerCase();
+          const normalizeGender = (val) => {
+            if (!val) return '';
+            const s = String(val).trim().toLowerCase();
+            if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+            if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+            return '';
+          };
+          const genderNormalized = normalizeGender(user.gender);
           setUserGender(genderNormalized);
           setUserAvatar(user.avatar || "");
 
@@ -416,7 +430,7 @@ function Header({ onToggleSidebar, children }) {
                 style={{ width: "36px", height: "36px" }}
               />
             </div>
-          ) : (
+          ) : userGender === "male" ? (
             <div
               style={{
                 cursor: "pointer",
@@ -434,6 +448,26 @@ function Header({ onToggleSidebar, children }) {
                 src={profile}
                 alt="Male Avatar"
                 style={{ width: "36px", height: "36px" }}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                cursor: "pointer",
+                width: "45px",
+                height: "45px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              onClick={() => setShowDropdown(!showDropdown)}
+            >
+              <img
+                src={profile}
+                alt="Profile"
+                style={{ width: "36px", height: "36px", borderRadius: '50%' }}
               />
             </div>
       

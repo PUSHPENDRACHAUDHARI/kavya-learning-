@@ -120,10 +120,18 @@ function Dashboard() {
                 // If parsing fails, use firstLogin from profile
               }
             }
-            // Save profile data with isFirstLogin flag
+            // Save profile data with isFirstLogin flag and normalize gender
+            const normalizeGender = (val) => {
+              if (!val) return '';
+              const s = String(val).trim().toLowerCase();
+              if (s === 'male' || s === 'm') return 'male';
+              if (s === 'female' || s === 'f') return 'female';
+              return '';
+            };
             const userDataToSave = {
               ...profileData,
-              isFirstLogin: isFirstLoginValue
+              isFirstLogin: isFirstLoginValue,
+              gender: normalizeGender(profileData.gender)
             };
             localStorage.setItem('user', JSON.stringify(userDataToSave));
             window.dispatchEvent(new Event('userUpdated'));

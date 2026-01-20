@@ -66,11 +66,36 @@ const InstructorCourses = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Prevent special characters in category field
+    if (name === 'category') {
+      if (/[@#$%!]/.test(value)) {
+        alert('Category cannot contain special characters: @, #, $, %, !');
+        return;
+      }
+    }
+    
+    // Validate numeric fields to prevent negative values
+    if (name === 'price') {
+      const numValue = parseFloat(value);
+      if (value !== '' && numValue < 0) {
+        alert('Price must be greater than or equal to 0');
+        return;
+      }
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate price is not negative
+    if (parseFloat(formData.price) < 0) {
+      alert('Price must be greater than or equal to 0');
+      return;
+    }
+    
     try {
       let courseRes;
       if (editingCourse) {

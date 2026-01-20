@@ -10,6 +10,14 @@ exports.createUser = async (req, res) => {
     const { fullName, email, password, role, phone, address } = req.body;
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: 'User already exists' });
+    if (phone) {
+      // enforce 10-digit numeric phone format
+      if (!/^\d{10}$/.test(phone)) {
+        return res.status(400).json({ message: 'Phone must be exactly 10 digits' });
+      }
+      const phoneExists = await User.findOne({ phone });
+      if (phoneExists) return res.status(400).json({ message: 'Phone number already in use' });
+    }
     const user = await User.create({ fullName, email, password, role, phone, address });
     await ActivityLog.create({ action: 'create_user', performedBy: req.user._id, targetType: 'User', targetId: user._id, details: { email } });
     res.status(201).json(user);
@@ -18,15 +26,39 @@ exports.createUser = async (req, res) => {
   }
 };
 
+// Check phone availability (used by frontend to prevent duplicates)
+exports.checkPhone = async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ message: 'Phone query required' });
+    if (!/^\d{10}$/.test(phone)) return res.status(400).json({ message: 'Phone must be exactly 10 digits' });
+    const user = await User.findOne({ phone });
+    return res.json({ exists: !!user });
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+};
+
 exports.listUsers = async (req, res) => {
   try {
-    const { role, search, page = 1, limit = 20, status } = req.query;
+    const { role, search, page = 1, limit = 20, status, sortBy, sortOrder } = req.query;
     const filter = {};
     if (role) filter.role = role;
     if (status) filter.status = status;
     if (search) filter.$or = [{ fullName: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
 
-    const users = await User.find(filter).select('-password').skip((page-1)*limit).limit(Number(limit)).sort({ createdAt: -1 });
+    // Build sort object: default to createdAt desc
+    let sortObj = { createdAt: -1 };
+    if (sortBy) {
+      const order = sortOrder === 'desc' ? -1 : 1;
+      // allow only specific fields for sorting to avoid injection
+      const allowed = ['fullName', 'email', 'createdAt'];
+      if (allowed.includes(sortBy)) {
+        sortObj = { [sortBy]: order };
+      }
+    }
+
+    const users = await User.find(filter).select('-password').skip((page-1)*limit).limit(Number(limit)).sort(sortObj);
     const total = await User.countDocuments(filter);
     res.json({ data: users, total });
   } catch (err) {

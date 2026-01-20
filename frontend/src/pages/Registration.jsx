@@ -71,9 +71,21 @@ function Registration() {
         return;
       }
 
+      // Normalize gender before storing user and notify listeners
+      const normalizeGender = (val) => {
+        if (!val) return "";
+        const s = String(val).trim().toLowerCase();
+        if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+        if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+        return '';
+      };
+      const userToStore = { ...data.user, gender: normalizeGender(data.user.gender) };
       localStorage.setItem("token", data.user.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("user", JSON.stringify(userToStore));
+      // keep both keys to be safe (some code reads `role`, others `userRole`)
       localStorage.setItem("role", data.user.role);
+      localStorage.setItem("userRole", data.user.role);
+      try { window.dispatchEvent(new Event('userUpdated')); } catch (e) { /* ignore */ }
 
       navigate("/");
     } catch (err) {

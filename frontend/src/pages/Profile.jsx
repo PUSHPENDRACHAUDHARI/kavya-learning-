@@ -80,6 +80,16 @@ export default function Profile() {
             setUserRole(profileRes.role);
             localStorage.setItem('userRole', profileRes.role);
           }
+          // Normalize gender to canonical values for consistent rendering
+          const normalizeGender = (val) => {
+            if (!val) return "";
+            const s = String(val).trim().toLowerCase();
+            if (!s) return "";
+            if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+            if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+            return '';
+          };
+
           setProfile((prev) => ({
             ...prev,
             name: profileRes.fullName || prev.name,
@@ -87,7 +97,7 @@ export default function Profile() {
             phone: profileRes.phone || prev.phone,
             location: profileRes.location || prev.location,
             bio: profileRes.bio || prev.bio,
-            gender: profileRes.gender || prev.gender,
+            gender: normalizeGender(profileRes.gender || prev.gender),
             avatar: profileRes.avatar || null,
             initials: ((profileRes.fullName || prev.name) + "")
               .split(" ")
@@ -120,6 +130,14 @@ export default function Profile() {
           try {
             // Keep localStorage user in sync so Header and other components update
             const userToStore = { ...profileRes };
+            // normalize gender before storing
+            userToStore.gender = (function (val) {
+              if (!val) return '';
+              const s = String(val).trim().toLowerCase();
+              if (s === 'male' || s === 'm') return 'male';
+              if (s === 'female' || s === 'f') return 'female';
+              return '';
+            })(profileRes.gender);
             localStorage.setItem('user', JSON.stringify(userToStore));
             window.dispatchEvent(new Event('userUpdated'));
           } catch (e) {
@@ -204,6 +222,26 @@ export default function Profile() {
       window.removeEventListener('enrollmentUpdated', handleEnrollmentUpdate);
     };
   }, []);
+
+  // Determine effective gender (prefer profile state, fall back to stored user)
+  const normalizeGender = (val) => {
+    if (!val) return "";
+    const s = String(val).trim().toLowerCase();
+    if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+    if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+    return '';
+  };
+
+  const getStoredGender = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return '';
+      const u = JSON.parse(raw);
+      return normalizeGender(u.gender || u.sex || u.Gender || '');
+    } catch (e) { return ''; }
+  };
+
+  const effectiveGender = profile.gender || getStoredGender();
   
 
   const [skills, setSkills] = useState([
@@ -334,7 +372,7 @@ export default function Profile() {
             localStorage.setItem('user', JSON.stringify(u));
           } else {
             // store minimal user object if none exists
-            localStorage.setItem('user', JSON.stringify({ avatar: result.avatar, fullName: profile.name, role: userRole }));
+            localStorage.setItem('user', JSON.stringify({ avatar: result.avatar, fullName: profile.name, role: userRole, gender: (function (v) { if (!v) return ''; const s = String(v).trim().toLowerCase(); if (s==='m' || s==='male') return 'male'; if (s==='f' || s==='female') return 'female'; return ''; })(profile.gender) }));
           }
           window.dispatchEvent(new Event('userUpdated'));
         } catch (e) {}
@@ -405,13 +443,22 @@ export default function Profile() {
         }));
         try {
           const stored = localStorage.getItem('user');
+          const normalizeGenderLocal = (val) => {
+            if (!val) return '';
+            const s = String(val).trim().toLowerCase();
+            if (s === 'male' || s === 'm') return 'male';
+            if (s === 'female' || s === 'f') return 'female';
+            return '';
+          };
+
           if (stored) {
             const u = JSON.parse(stored);
             u.fullName = updated.fullName || u.fullName;
             if (updated.avatar) u.avatar = updated.avatar;
+            u.gender = normalizeGenderLocal(updated.gender ?? profile.gender ?? u.gender);
             localStorage.setItem('user', JSON.stringify(u));
           } else {
-            localStorage.setItem('user', JSON.stringify({ fullName: updated.fullName, avatar: updated.avatar, role: userRole }));
+            localStorage.setItem('user', JSON.stringify({ fullName: updated.fullName, avatar: updated.avatar, role: userRole, gender: normalizeGenderLocal(updated.gender ?? profile.gender) }));
           }
           window.dispatchEvent(new Event('userUpdated'));
         } catch (e) {}
@@ -444,24 +491,24 @@ export default function Profile() {
                   alt={profile.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
                 />
-              ) : (
-                (profile.gender === 'female') ? (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                    <img 
-                      src={avatarFemale} 
-                      alt="female avatar"
-                      style={{ width: '90%', height: '90%' }}
-                    />
-                  </div>
-                ) : (profile.gender === 'male') ? (
-                  <img
-                    src={profileAvatar}
-                    alt="male avatar"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              ) : profile.gender === 'female' || effectiveGender === 'female' ? (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                  <img 
+                    src={avatarFemale} 
+                    alt="female avatar"
+                    style={{ width: '90%', height: '90%' }}
                   />
-                ) : (
-                  profile.initials
-                )
+                </div>
+              ) : profile.gender === 'male' || effectiveGender === 'male' ? (
+                <img
+                  src={profileAvatar}
+                  alt="male avatar"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', fontSize: '18px', fontWeight: 'bold', color: 'white' }}>
+                  {profile.initials}
+                </div>
               )}
             </div>
 

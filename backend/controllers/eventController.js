@@ -16,6 +16,42 @@ const createEvent = asyncHandler(async (req, res) => {
         course
     } = req.body;
 
+    // Combine date + time into full Date objects and validate
+    const parseTimeString = (timeStr) => {
+        if (!timeStr || typeof timeStr !== 'string') return null;
+        // Accept formats like "HH:MM" or "H:MM AM/PM" or "HH:MM AM/PM"
+        const m = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+        if (!m) return null;
+        let hh = parseInt(m[1], 10);
+        const mm = parseInt(m[2], 10);
+        const mer = m[3] ? m[3].toUpperCase() : null;
+        if (mer) {
+            if (mer === 'AM' && hh === 12) hh = 0;
+            else if (mer === 'PM' && hh !== 12) hh += 12;
+        }
+        if (isNaN(hh) || isNaN(mm)) return null;
+        return { hh, mm };
+    };
+
+    const buildDateTime = (dateStr, timeStr) => {
+        if (!dateStr || !timeStr) return null;
+        const datePart = new Date(dateStr);
+        if (isNaN(datePart)) return null;
+        const parsed = parseTimeString(timeStr);
+        if (!parsed) return null;
+        datePart.setHours(parsed.hh, parsed.mm, 0, 0);
+        return datePart;
+    };
+
+    const startDT = buildDateTime(date, startTime);
+    const endDT = buildDateTime(date, endTime);
+    if (!startDT || !endDT) {
+        return res.status(400).json({ message: 'Invalid date or time format. Expected date YYYY-MM-DD and time HH:MM with optional AM/PM.' });
+    }
+    if (endDT.getTime() <= startDT.getTime()) {
+        return res.status(400).json({ message: 'endDateTime must be later than startDateTime' });
+    }
+
     const event = await Event.create({
         title,
         instructor: req.user._id, // From auth middleware

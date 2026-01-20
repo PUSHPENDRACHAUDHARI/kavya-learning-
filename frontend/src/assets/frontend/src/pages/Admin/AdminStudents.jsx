@@ -109,10 +109,10 @@ const AdminStudents = () => {
                 Status:{" "}
                 <span
                   className={`badge bg-${
-                    s.status === "active" ? "success" : "danger"
+                    (s.user_status === 'Blocked' || s.status === 'inactive') ? 'danger' : 'success'
                   }`}
                 >
-                  {s.status || "active"}
+                  {s.user_status ? s.user_status : (s.status ? (s.status === 'active' ? 'Active' : 'Inactive') : 'Active')}
                 </span>
               </td>
 

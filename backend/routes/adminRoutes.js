@@ -10,6 +10,7 @@ console.log('➡️  Admin routes loaded and registered');
 
 // Users (admin or sub-admin with manageStudents permission)
 router.post('/users', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.createUser);
+router.get('/users/check-phone', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.checkPhone);
 router.get('/users', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.listUsers);
 router.get('/users/:id', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.getUser);
 router.put('/users/:id', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.updateUser);

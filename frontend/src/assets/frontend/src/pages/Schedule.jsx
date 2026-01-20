@@ -103,7 +103,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
             date: res.date ? new Date(res.date).toLocaleDateString() : form.date,
             time: `${res.startTime || form.startTime} - ${res.endTime || form.endTime}`,
             location: res.location || (form.location || 'Online'),
-            students: (res.enrolledStudents || []).length + ' students',
+            students: getStudentsText(res),
             type: res.type || form.type,
             status: res.status || 'Scheduled',
             _id: res._id
@@ -288,6 +288,44 @@ function Schedule() {
     start.setHours(0, 0, 0, 0);
     return start;
   }, [currentDate]);
+
+  // Helper to determine students text: prefer enrolled count, fall back to maxStudents
+  const getStudentsText = (evt) => {
+    try {
+      if (!evt) return '0 students';
+      if (Array.isArray(evt.enrolledStudents) && evt.enrolledStudents.length > 0) return `${evt.enrolledStudents.length} students`;
+      if (typeof evt.enrolledStudents === 'number' && evt.enrolledStudents > 0) return `${evt.enrolledStudents} students`;
+      if (typeof evt.maxStudents === 'number' && evt.maxStudents >= 0) return `${evt.maxStudents} students`;
+      if (evt.maxStudents) return `${evt.maxStudents} students`;
+      if (typeof evt.students === 'string') return evt.students;
+      return '0 students';
+    } catch (err) {
+      return '0 students';
+    }
+  };
+  // compute local expiry for locally-persisted events based on end time
+  const computeLocalExpiry = (dateStr, timeStr) => {
+    try {
+      if (!dateStr) return null;
+      const base = new Date(dateStr);
+      if (isNaN(base)) return null;
+      const parts = (timeStr || '').split('-').map(p => p.trim());
+      const endPart = parts[1] || parts[0] || '';
+      const m = endPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+      let hh = 23, mm = 59;
+      if (m) {
+        hh = parseInt(m[1], 10);
+        mm = m[2] ? parseInt(m[2], 10) : 0;
+        const mer = (m[3] || '').toUpperCase();
+        if (mer === 'PM' && hh < 12) hh += 12;
+        if (mer === 'AM' && hh === 12) hh = 0;
+      }
+      base.setHours(hh, mm, 0, 0);
+      return base.toISOString();
+    } catch (err) {
+      return null;
+    }
+  };
  
   // Do not load global events — users should only see their own events.
   // (Global loader removed for privacy; upcomingClasses and selectedDateEvents
@@ -318,7 +356,7 @@ function Schedule() {
             instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
             date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
             location: e.location || 'Online',
-            students: (e.enrolledStudents || []).length + ' students',
+            students: getStudentsText(e),
             type: e.type || 'Live Class',
             status: e.status || 'Scheduled',
             _id: e._id
@@ -601,7 +639,7 @@ function Schedule() {
           instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -627,7 +665,7 @@ function Schedule() {
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -647,7 +685,7 @@ function Schedule() {
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -1152,12 +1190,36 @@ function Schedule() {
           isOpen={isAddOpen}
           onClose={() => setIsAddOpen(false)}
           onAdd={(evt) => {
-            setClasses((prev) => [...prev, evt]);
-            // Add locally so creator sees the event immediately
-            setUpcomingClasses((prev) => [evt, ...prev]);
-            setUpcomingCount((c) => (c || 0) + 1);
-            // Refresh upcoming classes from server as well
-            fetchUpcomingClasses().catch(() => {});
+              // For admin/instructor-created events that are persisted on the server
+              // the backend's upcoming endpoint may not return them for admins (enrollment filter).
+              // To ensure admins see events they created immediately and persistently,
+              // store a local copy with an expiry at the event end time.
+              try {
+                if (evt && evt._id && !(userRole === 'student' || userRole === 'parent')) {
+                  try {
+                    const localCopy = { ...evt, _local: true };
+                    try { localCopy.localExpiresAt = computeLocalExpiry(localCopy.date, localCopy.time || `${localCopy.startTime || ''} - ${localCopy.endTime || ''}`); } catch (e) {}
+                    addLocalEventToStorage(localCopy);
+                    evt = localCopy;
+                  } catch (err) { /* ignore */ }
+                }
+              } catch (err) { /* ignore */ }
+
+              // Normalize students display: prefer existing, otherwise derive from maxStudents
+              const normalized = { ...evt };
+              if (!normalized.students) normalized.students = getStudentsText(normalized);
+
+              setClasses((prev) => [...prev, normalized]);
+              // Add locally so creator sees the event immediately; avoid duplicates
+              setUpcomingClasses((prev) => {
+                const list = prev || [];
+                const exists = normalized._id ? list.some(x => x._id && x._id === normalized._id) : list.some(x => x.title === normalized.title && x.date === normalized.date && x.time === normalized.time);
+                if (exists) return list;
+                return [normalized, ...list];
+              });
+              setUpcomingCount((c) => (c || 0) + 1);
+              // Refresh upcoming classes from server as well
+              fetchUpcomingClasses().catch(() => {});
           }}
           userRole={userRole}
           presetDate={presetDate}

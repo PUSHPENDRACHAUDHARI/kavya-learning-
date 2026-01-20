@@ -77,6 +77,15 @@ export default function Profile() {
             setUserRole(profileRes.role);
             localStorage.setItem('userRole', profileRes.role);
           }
+          // Normalize gender for consistent avatar rendering
+          const normalizeGender = (val) => {
+            if (!val) return '';
+            const s = String(val).trim().toLowerCase();
+            if (s === 'male' || s === 'm') return 'male';
+            if (s === 'female' || s === 'f') return 'female';
+            return '';
+          };
+
           setProfile((prev) => ({
             ...prev,
             name: profileRes.fullName || prev.name,
@@ -84,7 +93,7 @@ export default function Profile() {
             phone: profileRes.phone || prev.phone,
             location: profileRes.location || prev.location,
             bio: profileRes.bio || prev.bio,
-            gender: profileRes.gender || prev.gender,
+            gender: normalizeGender(profileRes.gender || prev.gender),
             avatar: profileRes.avatar || null,
             initials: ((profileRes.fullName || prev.name) + "")
               .split(" ")
@@ -151,6 +160,25 @@ export default function Profile() {
       }
     })();
   }, []);
+
+  const normalizeGender = (val) => {
+    if (!val) return "";
+    const s = String(val).trim().toLowerCase();
+    if (s === 'male' || s === 'm' || s === 'man' || s === 'boy') return 'male';
+    if (s === 'female' || s === 'f' || s === 'woman' || s === 'girl') return 'female';
+    return '';
+  };
+
+  const getStoredGender = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return '';
+      const u = JSON.parse(raw);
+      return normalizeGender(u.gender || u.sex || u.Gender || '');
+    } catch (e) { return ''; }
+  };
+
+  const effectiveGender = profile.gender || getStoredGender();
   
 
   const [skills, setSkills] = useState([
@@ -334,7 +362,21 @@ export default function Profile() {
                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
                   />
                 ) : (
-                  profile.initials
+                  (effectiveGender === 'female') ? (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                      <img 
+                        src={avatarFemale} 
+                        alt="female avatar"
+                        style={{ width: '90%', height: '90%' }}
+                      />
+                    </div>
+                  ) : (
+                    <img
+                      src={profileAvatar}
+                      alt="profile avatar"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                    />
+                  )
                 )
               )}
             </div>
