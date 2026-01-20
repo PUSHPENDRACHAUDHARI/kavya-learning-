@@ -48,6 +48,27 @@ export async function getEvents() {
   return res.json();
 }
 
+// Convenience: get events for a specific date (client-side filter)
+export async function getEventsByDate(dateStr) {
+  try {
+    const all = await getEvents();
+    if (!Array.isArray(all)) return [];
+    // Normalize incoming dateStr (YYYY-MM-DD)
+    const target = (dateStr || '').split('T')[0];
+    return all.filter(e => {
+      try {
+        if (!e || !e.date) return false;
+        const d = new Date(e.date).toISOString().split('T')[0];
+        return d === target;
+      } catch (err) {
+        return false;
+      }
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
 export async function createEvent(payload) {
   const res = await fetch(`${BASE}/events`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
   return res.json();
@@ -237,6 +258,26 @@ export async function getUpcomingClasses(limit = 20, page = 1) {
   return res.json();
 }
 
+// Lightweight helper to get a list of instructors. The backend may not expose
+// a public instructors list; return empty array when unavailable.
+export async function getInstructors() {
+  try {
+    // Try common endpoint if available
+    const res = await fetch(`${BASE}/users?role=instructor`, { headers: authHeaders() });
+    if (res.ok) return res.json();
+  } catch (err) {
+    // ignore and fall through
+  }
+  // Fallback: try instructor route (may require auth/role)
+  try {
+    const res2 = await fetch(`${BASE}/instructor/students`, { headers: authHeaders() });
+    if (res2.ok) return res2.json();
+  } catch (err) {
+    // ignore
+  }
+  return [];
+}
+
 // ===== Student dashboard feed (live, upcoming, notifications, announcements) =====
 
 
@@ -248,6 +289,7 @@ export default {
   getQuiz,
   submitQuiz,
   getEvents,
+  getEventsByDate,
   createEvent,
   getProfile,
   getProgressOverview,
@@ -260,4 +302,5 @@ export default {
   getStreak
   ,getUpcomingClasses
   ,getDashboardFeed
+  ,getInstructors
 };

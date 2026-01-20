@@ -4,6 +4,23 @@ import { Calendar, Bell } from "lucide-react";
 import "../assets/schedule.css";
 import AppLayout from "../components/AppLayout";
  
+// Helper available to modal and other early code: prefer enrolledStudents, then maxStudents
+const getStudentsText = (evt) => {
+  try {
+    if (!evt) return '0 students';
+    // Prefer enrolledStudents only when there are enrolled students (>0).
+    if (Array.isArray(evt.enrolledStudents) && evt.enrolledStudents.length > 0) return `${evt.enrolledStudents.length} students`;
+    if (typeof evt.enrolledStudents === 'number' && evt.enrolledStudents > 0) return `${evt.enrolledStudents} students`;
+    // Fall back to maxStudents when no enrolled students exist
+    if (typeof evt.maxStudents === 'number' && evt.maxStudents >= 0) return `${evt.maxStudents} students`;
+    if (evt.maxStudents) return `${evt.maxStudents} students`;
+    if (typeof evt.students === 'string') return evt.students;
+    return '0 students';
+  } catch (err) {
+    return '0 students';
+  }
+};
+
 function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
   const [form, setForm] = useState({
     title: "",
@@ -20,6 +37,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
   const [instructors, setInstructors] = useState([]);
   const [loadingInstructors, setLoadingInstructors] = useState(false);
   const [instructorsError, setInstructorsError] = useState(null);
+  const [formError, setFormError] = useState(null);
 
   useEffect(() => {
     if (presetDate) {
@@ -52,6 +70,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
 
   function handleSubmit(e) {
     e.preventDefault();
+    setFormError(null);
     // client-side validation
     if (userRole === 'student' || userRole === 'parent') {
       if (!form.title || !form.instructor || !form.date || !form.startTime || !form.endTime) {
@@ -70,9 +89,38 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
     const today = new Date();
     today.setHours(0,0,0,0);
     if (selected < today) {
-      alert('Cannot create events for past dates');
+      setFormError('Cannot create events for past dates');
       return;
     }
+    // Build start and end datetimes from date + time + AM/PM
+    const buildDateTime = (dateStr, timeStr, period) => {
+      if (!dateStr || !timeStr) return null;
+      const [hhStr, mmStr] = (timeStr || '').split(':');
+      let hh = parseInt(hhStr, 10);
+      const mm = mmStr ? parseInt(mmStr, 10) : 0;
+      if (isNaN(hh) || isNaN(mm)) return null;
+      // If period provided (AM/PM), and time appears to be 1-12, apply it.
+      if (period && (period === 'AM' || period === 'PM')) {
+        if (hh === 12 && period === 'AM') hh = 0;
+        else if (period === 'PM' && hh !== 12 && hh <= 12) hh += 12;
+      }
+      const dt = new Date(dateStr);
+      if (isNaN(dt)) return null;
+      dt.setHours(hh, mm, 0, 0);
+      return dt;
+    };
+
+    const startDateTime = buildDateTime(form.date, form.startTime, form.startPeriod);
+    const endDateTime = buildDateTime(form.date, form.endTime, form.endPeriod);
+    if (!startDateTime || !endDateTime) {
+      setFormError('Please provide valid start and end times in HH:mm format');
+      return;
+    }
+    if (endDateTime.getTime() <= startDateTime.getTime()) {
+      setFormError('End time must be later than start time');
+      return;
+    }
+
     const timeRange = `${form.startTime} ${form.startPeriod} - ${form.endTime} ${form.endPeriod}`;
     const newEvent = userRole === 'student' ? {
       title: form.title,
@@ -97,6 +145,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
       try {
         const api = await import("../api");
         const res = await api.createEvent(newEvent);
+        // Success when server returns created event with _id
         if (res && res._id) {
           onAdd({
             title: res.title,
@@ -104,13 +153,17 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
             date: res.date ? new Date(res.date).toLocaleDateString() : form.date,
             time: `${res.startTime || form.startTime} - ${res.endTime || form.endTime}`,
             location: res.location || (form.location || 'Online'),
-            students: (res.enrolledStudents || []).length + ' students',
+            students: getStudentsText(res),
             type: res.type || form.type,
             status: res.status || 'Scheduled',
             _id: res._id
           });
+        } else if (res && (res.message || res.error)) {
+          // Server-side validation error or other rejection - show to user and do not save locally
+          setFormError(res.message || res.error || 'Failed to create event');
+          return;
         } else {
-          // Local fallback: mark event as local and attach expiry based on end time
+          // Unknown server response - treat as network fallback and save locally
           const computeLocalExpiry = (dateStr, timeStr) => {
             try {
               if (!dateStr) return null;
@@ -202,6 +255,11 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
         </div>
  
         <form onSubmit={handleSubmit}>
+          {formError && (
+            <div className="alert alert-danger mb-3" role="alert">
+              {formError}
+            </div>
+          )}
           <div className="row g-3">
             <div className="col-12">
               <label className="form-label">Event Title</label>
@@ -371,6 +429,32 @@ function Schedule() {
     start.setHours(0, 0, 0, 0);
     return start;
   }, [currentDate]);
+
+  // compute local expiry for locally-persisted events based on end time
+  const computeLocalExpiry = (dateStr, timeStr) => {
+    try {
+      if (!dateStr) return null;
+      const base = new Date(dateStr);
+      if (isNaN(base)) return null;
+      const parts = (timeStr || '').split('-').map(p => p.trim());
+      const endPart = parts[1] || parts[0] || '';
+      const m = endPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+      let hh = 23, mm = 59;
+      if (m) {
+        hh = parseInt(m[1], 10);
+        mm = m[2] ? parseInt(m[2], 10) : 0;
+        const mer = (m[3] || '').toUpperCase();
+        if (mer === 'PM' && hh < 12) hh += 12;
+        if (mer === 'AM' && hh === 12) hh = 0;
+      }
+      base.setHours(hh, mm, 0, 0);
+      return base.toISOString();
+    } catch (err) {
+      return null;
+    }
+  };
+
+  // `getStudentsText` is defined above so the modal can call it early.
  
   // Do not load global events — users should only see their own events.
   // (Global loader removed for privacy; upcomingClasses and selectedDateEvents
@@ -401,7 +485,7 @@ function Schedule() {
             instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
             date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
             location: e.location || 'Online',
-            students: (e.enrolledStudents || []).length + ' students',
+            students: getStudentsText(e),
             type: e.type || 'Live Class',
             status: e.status || 'Scheduled',
             _id: e._id
@@ -684,7 +768,7 @@ function Schedule() {
           instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -702,7 +786,7 @@ function Schedule() {
     try {
       const api = await import('../api');
       const res = await api.getUpcomingClasses(20, 1);
-      if (res && res.success) {
+        if (res && res.success) {
         setUpcomingCount(res.upcomingCount || 0);
         const mapped = (res.upcoming || []).map((e) => ({
           title: e.title,
@@ -710,7 +794,7 @@ function Schedule() {
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -742,7 +826,7 @@ function Schedule() {
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
-          students: (e.enrolledStudents || []).length + ' students',
+          students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
@@ -836,6 +920,16 @@ function Schedule() {
       if (!pending || pending.length === 0) return;
       const api = await import('../api');
       for (const ev of pending) {
+        // If the local entry already references a server _id, skip re-creating it.
+        if (ev && ev._id) {
+          // ensure it appears in upcomingClasses state (merge if missing)
+          setUpcomingClasses(prev => {
+            const exists = (prev || []).some(p => p._id && ev._id && p._id === ev._id);
+            if (exists) return prev;
+            return [ev, ...(prev || [])];
+          });
+          continue;
+        }
         try {
           // Skip if already expired
           if (ev.localExpiresAt && new Date(ev.localExpiresAt).getTime() <= Date.now()) {
@@ -862,7 +956,7 @@ function Schedule() {
               date: res.date ? new Date(res.date).toLocaleDateString() : ev.date,
               time: `${res.startTime || ev.time?.split('-')[0]?.trim() || 'TBD'} - ${res.endTime || ev.time?.split('-')[1]?.trim() || 'TBD'}`,
               location: res.location || ev.location || 'Online',
-              students: (res.enrolledStudents || []).length + ' students',
+              students: getStudentsText(res) || getStudentsText(ev),
               type: res.type || ev.type || 'Live Class',
               status: res.status || 'Scheduled',
               _id: res._id
@@ -1367,21 +1461,53 @@ function Schedule() {
           isOpen={isAddOpen}
           onClose={() => setIsAddOpen(false)}
           onAdd={(evt) => {
-            // persist local-created events to localStorage so they survive reloads
-            if (evt && evt._local) {
-              try { addLocalEventToStorage(evt); } catch (err) { /* ignore */ }
-            }
-            setClasses((prev) => [...prev, evt]);
-            // Add locally so creator sees the event immediately
-            setUpcomingClasses((prev) => [evt, ...prev]);
+            try {
+              // For events created without server persistence (network fallback)
+              // keep them in local storage so they survive reloads.
+              if (evt && evt._local) addLocalEventToStorage(evt);
+
+              // For admin/instructor-created events that are persisted on the server
+              // the backend's upcoming endpoint only returns events where the user
+              // is enrolled. To ensure admins see events they create immediately,
+              // also persist a local copy (marked _local) so it will be merged
+              // into upcomingClasses on subsequent fetches instead of being
+              // wiped out by the server response.
+              if (evt && evt._id && !(userRole === 'student' || userRole === 'parent')) {
+                try {
+                  const localCopy = { ...evt, _local: true };
+                  // ensure local expiry is set based on the event end time so it persists
+                  try { localCopy.localExpiresAt = computeLocalExpiry(localCopy.date, localCopy.time || `${localCopy.startTime || ''} - ${localCopy.endTime || ''}`); } catch (e) {}
+                  addLocalEventToStorage(localCopy);
+                  evt = localCopy;
+                } catch (err) { /* ignore */ }
+              }
+            } catch (err) { /* ignore */ }
+
+            // Normalize students display: prefer existing, otherwise derive from maxStudents
+            const normalized = { ...evt };
+            if (!normalized.students) normalized.students = getStudentsText(normalized);
+
+            setClasses((prev) => [...prev, normalized]);
+            // Add locally so creator sees the event immediately; avoid duplicates
+            setUpcomingClasses((prev) => {
+              const list = prev || [];
+              // avoid duplicate by _id, otherwise by title+date+time
+              const exists = normalized._id ? list.some(x => x._id && x._id === normalized._id) : list.some(x => x.title === normalized.title && x.date === normalized.date && x.time === normalized.time);
+              if (exists) return list;
+              return [normalized, ...list];
+            });
             setUpcomingCount((c) => (c || 0) + 1);
-            // If the event was persisted on the server (has an _id), refresh immediately.
-            // If not persisted (student-local fallback), avoid overwriting the local event
-            // by delaying the refresh so the local entry remains visible.
-            if (evt && evt._id) {
-              fetchUpcomingClasses().catch(() => {});
-            } else {
-              setTimeout(() => fetchUpcomingClasses().catch(() => {}), 5000);
+
+            // Only refresh upcoming list immediately for student/parent roles
+            // because the server will include their events. For admin/instructor
+            // we avoid an immediate fetch which would remove the locally-added
+            // copy (server does not return it since the admin isn't enrolled).
+            if (userRole === 'student' || userRole === 'parent') {
+              if (evt && evt._id) {
+                fetchUpcomingClasses().catch(() => {});
+              } else {
+                setTimeout(() => fetchUpcomingClasses().catch(() => {}), 5000);
+              }
             }
           }}
           userRole={userRole}
