@@ -1812,6 +1812,8 @@ export default function Courses() {
 
   // Reviews: Persisting the reviews (default reviews + new ones)
   const [reviews, setReviews] = useLocalStorage("reviews", initialReviews);
+  const [editingReviewId, setEditingReviewId] = useState(null);
+  const [editFormData, setEditFormData] = useState({ rating: 0, text: "" });
 
   // Resources: Persisting the resources (default resources + new ones)
   const [resources, setResources] = useLocalStorage(
@@ -1836,6 +1838,29 @@ export default function Courses() {
 
   const addReview = (newReview) => {
     setReviews((prevReviews) => [newReview, ...prevReviews]); // Newest first
+  };
+
+  const editReview = (reviewId, updatedData) => {
+    setReviews((prevReviews) =>
+      prevReviews.map((review) =>
+        review.id === reviewId ? { ...review, ...updatedData } : review
+      )
+    );
+    setEditingReviewId(null);
+    setEditFormData({ rating: 0, text: "" });
+  };
+
+  const deleteReview = (reviewId) => {
+    if (window.confirm("Are you sure you want to delete this review?")) {
+      setReviews((prevReviews) =>
+        prevReviews.filter((r) => r.id !== reviewId)
+      );
+    }
+  };
+
+  const startEditReview = (review) => {
+    setEditingReviewId(review.id);
+    setEditFormData({ rating: review.rating, text: review.text });
   };
 
   const addResource = (newResource) => {
@@ -3022,31 +3047,117 @@ export default function Courses() {
                     key={review.id}
                     className="review-card-screenshot p-3 rounded-3"
                     style={{ cursor: "pointer" }}
-                    onClick={() =>
-                      navigate("/course-review", {
-                        state: { review },
-                      })
-                    }
                   >
-                    <div className="d-flex align-items-center gap-3 mb-3">
-                      <div className="review-avatar rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
-                        {review.avatar}
-                      </div>
+                    {editingReviewId === review.id ? (
+                      // Edit Form
                       <div>
-                        {/* <div className="review-name fw-bold">
-                        {review.name}
-                        {review.id <= 3 && (
-                          <span className="badge bg-secondary ms-2">
-                            Verified
-                          </span>
-                        )}
-                      </div> */}
-                        <div className="text-success">
-                          {renderStars(review.rating)}
+                        <h6 className="mb-3">Edit Review</h6>
+                        <div className="mb-2">
+                          <label>Rating:</label>
+                          <div className="mb-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                className="btn btn-sm"
+                                onClick={() =>
+                                  setEditFormData({ ...editFormData, rating: star })
+                                }
+                                style={{
+                                  color:
+                                    editFormData.rating >= star ? "#ffc107" : "#ccc",
+                                }}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mb-2">
+                          <label>Review:</label>
+                          <textarea
+                            className="form-control"
+                            rows="3"
+                            value={editFormData.text}
+                            onChange={(e) =>
+                              setEditFormData({ ...editFormData, text: e.target.value })
+                            }
+                          ></textarea>
+                        </div>
+                        <div className="d-flex gap-2">
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => {
+                              if (editFormData.text.trim()) {
+                                editReview(review.id, {
+                                  rating: editFormData.rating,
+                                  text: editFormData.text,
+                                });
+                              } else {
+                                alert("Please enter a review");
+                              }
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => {
+                              setEditingReviewId(null);
+                              setEditFormData({ rating: 0, text: "" });
+                            }}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       </div>
-                    </div>
-                    <p className="review-text mb-0">{review.text}</p>
+                    ) : (
+                      // Review Display
+                      <>
+                        <div className="d-flex align-items-center justify-content-between mb-3">
+                          <div className="d-flex align-items-center gap-3">
+                            <div className="review-avatar rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
+                              {review.avatar}
+                            </div>
+                            <div>
+                              {/* <div className="review-name fw-bold">
+                              {review.name}
+                              {review.id <= 3 && (
+                                <span className="badge bg-secondary ms-2">
+                                  Verified
+                                </span>
+                              )}
+                            </div> */}
+                              <div className="text-success">
+                                {renderStars(review.rating)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-sm btn-warning"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditReview(review);
+                              }}
+                              title="Edit review"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteReview(review.id);
+                              }}
+                              title="Delete review"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                        <p className="review-text mb-0">{review.text}</p>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
