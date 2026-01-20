@@ -19,6 +19,24 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Prevent special characters in category field
+    if (name === 'category') {
+      if (/[@#$%!]/.test(value)) {
+        alert('Category cannot contain special characters: @, #, $, %, !');
+        return;
+      }
+    }
+    
+    // Validate numeric fields to prevent negative values
+    if (name === 'price') {
+      const numValue = parseFloat(value);
+      if (value !== '' && numValue < 0) {
+        alert('Price must be greater than or equal to 0');
+        return;
+      }
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -35,6 +53,13 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate price is not negative
+    if (parseFloat(formData.price) < 0) {
+      alert('Price must be greater than or equal to 0');
+      return;
+    }
+    
     try {
       // Create course first
       const createRes = await axiosClient.post('/api/admin/courses', formData);
@@ -89,21 +114,42 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-      <input type="text" name="title" placeholder="Course Title" value={formData.title} onChange={handleChange} required className="form-control" style={{ gridColumn: '1 / -1' }} />
-      <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="form-control" style={{ gridColumn: '1 / -1', minHeight: '100px' }}></textarea>
-      <input type="text" name="category" placeholder="Category" value={formData.category} onChange={handleChange} required className="form-control" />
-      <select name="level" value={formData.level} onChange={handleChange} className="form-control">
-        <option value="Beginner">Beginner</option>
-        <option value="Intermediate">Intermediate</option>
-        <option value="Advanced">Advanced</option>
-      </select>
-      <input type="text" name="duration" placeholder="Duration (e.g., 4 weeks)" value={formData.duration} onChange={handleChange} required className="form-control" />
-      <input type="number" name="price" placeholder="Price" value={formData.price} onChange={handleChange} required className="form-control" />
-      <select name="status" value={formData.status} onChange={handleChange} className="form-control">
+      <div style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor="title" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Course Title</label>
+        <input id="title" type="text" name="title" placeholder="Course Title" value={formData.title} onChange={handleChange} required className="form-control" />
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <label htmlFor="description" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Description</label>
+        <textarea id="description" name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="form-control" style={{ minHeight: '100px' }}></textarea>
+      </div>
+      <div>
+        <label htmlFor="category" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Category</label>
+        <input id="category" type="text" name="category" placeholder="Category" value={formData.category} onChange={handleChange} required className="form-control" />
+      </div>
+      <div>
+        <label htmlFor="level" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Level</label>
+        <select id="level" name="level" value={formData.level} onChange={handleChange} className="form-control">
+          <option value="Beginner">Beginner</option>
+          <option value="Intermediate">Intermediate</option>
+          <option value="Advanced">Advanced</option>
+        </select>
+      </div>
+      <div>
+        <label htmlFor="duration" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Duration</label>
+        <input id="duration" type="text" name="duration" placeholder="Duration (e.g., 4 weeks)" value={formData.duration} onChange={handleChange} required className="form-control" />
+      </div>
+      <div>
+        <label htmlFor="price" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Price</label>
+        <input id="price" type="number" name="price" placeholder="Price" value={formData.price} onChange={handleChange} required className="form-control" min="0" step="0.01" />
+      </div>
+      <div>
+        <label htmlFor="status" style={{ display: 'block', marginBottom: '6px', fontWeight: '500' }}>Status</label>
+        <select id="status" name="status" value={formData.status} onChange={handleChange} className="form-control">
         <option value="draft">Draft</option>
         <option value="active">Active</option>
         <option value="archived">Archived</option>
       </select>
+      </div>
 
       <div style={{ gridColumn: '1 / -1' }}>
         <label style={{ display: 'block', marginBottom: 6 }}>Upload PDF resource (optional)</label>
