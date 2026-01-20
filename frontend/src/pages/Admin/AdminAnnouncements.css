@@ -74,8 +74,22 @@
   font-size: 11px;
 }
 
+.edit-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  margin-right: 8px;
+  transition: color 0.2s;
+}
+
+.edit-btn:hover {
+  color: #2196F3;
+}
+
 .delete-btn {
-  margin-left: auto;
   background: none;
   border: none;
   color: #999;
