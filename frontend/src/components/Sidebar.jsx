@@ -137,6 +137,7 @@ function Sidebar({ isOpen, setIsOpen }) {
     ] : []),
     ...(userRole === 'parent' ? [
       { path: "/profile", label: "Profile", icon: <LuUser /> },
+      { path: "/parent/dashboard", label: "Dashboard", icon: <FiHome /> },
       { path: "/parent/student-report", label: "Student Reports", icon: <MdSchool /> },
       { path: "/parent/announcements", label: "Announcements", icon: <MdAnnouncement /> }
       // Messages intentionally omitted for parent users

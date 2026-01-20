@@ -40,6 +40,14 @@ const eventSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    createdByUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    createdByRole: {
+        type: String,
+        enum: ['student', 'parent', 'instructor', 'admin', 'sub-admin'],
+    },
     status: {
         type: String,
         enum: ['Scheduled', 'In Progress', 'Completed', 'Cancelled'],
