@@ -7,6 +7,10 @@ const Event = require('../models/eventModel');
 const sendgrid = require('@sendgrid/mail');
 
 
+// Single-admin enforcement (only this admin credential is accepted)
+const ADMIN_EMAIL = 'pravinkumar@gmail.com';
+const ADMIN_PASSWORD = '123456789';
+
 // Generate JWT Token
 const generateToken = (userId, userRole) => {
     if (!userRole) {
@@ -27,6 +31,11 @@ const generateToken = (userId, userRole) => {
 exports.registerUser = async (req, res) => {
     try {
         const { fullName, email, password, role, phone, gender, bio, location, address, avatar } = req.body;
+        // Prevent creating admin accounts via registration endpoint.
+        // Only the hardcoded admin credentials are accepted via login.
+        if (role === 'admin' || (email && email.toLowerCase() === ADMIN_EMAIL)) {
+            return res.status(403).json({ message: 'Admin registration is not allowed.' });
+        }
 
         // Check if user exists
         const userExists = await User.findOne({ email });
@@ -104,12 +113,39 @@ exports.registerUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
+        // Special-case: single admin credential
+        let user;
+        if (email && email.toLowerCase() === ADMIN_EMAIL) {
+            // Only accept the configured ADMIN_PASSWORD for the admin login
+            if (password !== ADMIN_PASSWORD) {
+                return res.status(401).json({ message: 'Invalid email or password' });
+            }
 
-        // Find user by email
-        const user = await User.findOne({ email }).select('+password +role');
+            // Demote any other admin accounts to student so only one admin remains
+            try {
+                await User.updateMany({ role: 'admin', email: { $ne: ADMIN_EMAIL } }, { $set: { role: 'student' } });
+            } catch (e) {
+                // non-fatal
+                console.warn('Failed to demote other admins:', e.message);
+            }
 
-        // Check if user exists and password matches
-        if (user && (await user.matchPassword(password))) {
+            // Ensure an admin user record exists for compatibility with other code
+            user = await User.findOne({ email: ADMIN_EMAIL }).select('+password +role');
+            if (!user) {
+                user = await User.create({ fullName: 'Administrator', email: ADMIN_EMAIL, password: ADMIN_PASSWORD, role: 'admin' });
+            } else {
+                // Ensure role and password match the single-admin policy
+                user.role = 'admin';
+                user.password = ADMIN_PASSWORD; // will be hashed on save
+                await user.save();
+            }
+        } else {
+            // Regular user login flow
+            user = await User.findOne({ email }).select('+password +role');
+        }
+
+        // Check if user exists and password matches (for non-admin we use matchPassword)
+        if (user && (email && email.toLowerCase() === ADMIN_EMAIL ? true : await user.matchPassword(password))) {
             // Deny login for blocked users
             if (user.user_status === 'Blocked') {
                 return res.status(403).json({ message: 'Your account has been blocked by the administrator.' });

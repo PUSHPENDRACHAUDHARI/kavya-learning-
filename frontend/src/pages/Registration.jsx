@@ -222,7 +222,6 @@ function Registration() {
             >
               <option value="student">Student</option>
               <option value="instructor">Instructor</option>
-              <option value="admin">Admin</option>
               <option value="parent">Parent</option>
             </select>
 
