@@ -200,15 +200,23 @@ const deleteEvent = asyncHandler(async (req, res) => {
         throw new Error('Event not found');
     }
 
-    // Only the user who created the event may delete it.
-    // This enforces that Admin/Instructor can only delete events they personally created.
-    if (!event.createdByUserId || event.createdByUserId.toString() !== req.user._id.toString()) {
+    // Admin can delete any event - hard delete from all panels
+    if (req.user.role === 'admin' || req.user.role === 'sub-admin') {
+        // Admin permanently deletes the event from database
+        await Event.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Event permanently deleted from all panels' });
+    } 
+    // Instructor can only soft-delete (mark as deletedByRole: 'instructor')
+    else if (req.user.role === 'instructor') {
+        // Instructor soft-deletes - event is hidden from instructor and student panels but visible to admin
+        event.deletedByRole = 'instructor';
+        await event.save();
+        res.json({ message: 'Event deleted from instructor and student views' });
+    } 
+    else {
         res.status(403);
-        throw new Error('Forbidden: only the creator may delete this event');
+        throw new Error('Forbidden: only instructor or admin may delete this event');
     }
-
-    await event.remove();
-    res.json({ message: 'Event removed' });
 });
 
 // @desc    Set reminder for upcoming class
