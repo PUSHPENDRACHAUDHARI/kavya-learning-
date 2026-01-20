@@ -32,11 +32,11 @@ const InstructorAnnouncements = () => {
           }
         });
         
-        // Convert Map back to array and sort by creation date (newest first)
+        // Convert Map back to array and sort by creation date (oldest first)
         announcementData = Array.from(uniqueMap.values()).sort((a, b) => {
           const dateA = new Date(a.createdAt || 0);
           const dateB = new Date(b.createdAt || 0);
-          return dateB - dateA; // Descending order (newest first)
+          return dateA - dateB; // Ascending order (oldest/first announcement at top)
         });
         
         // Mark announcements as seen ONLY on first load
