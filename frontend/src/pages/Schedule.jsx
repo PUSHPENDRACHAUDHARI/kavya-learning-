@@ -801,6 +801,7 @@ function Schedule() {
           instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
           createdByRole: e.createdByRole || null,
+          deletedByRole: e.deletedByRole || null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
@@ -808,7 +809,19 @@ function Schedule() {
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
-        }));
+        })).filter(e => {
+          // Filter out events based on deletion permissions
+          // If not deleted, show to everyone
+          if (!e.deletedByRole) return true;
+          
+          // If deleted by instructor: only admin sees it
+          if (e.deletedByRole === 'instructor') {
+            return (userRole === 'admin' || userRole === 'sub-admin');
+          }
+          
+          // If deleted by admin: nobody sees it (shouldn't happen as admin hard-deletes)
+          return false;
+        });
         // Preserve any locally-created events that haven't expired.
         // If the server returns a duplicate (same title+date+time) but the local
         // copy is the creator's local copy (has _local + createdByUserId equal
@@ -1402,6 +1415,18 @@ function Schedule() {
                   </div>
 
                   <div className="d-flex gap-2">
+                    {(userRole === 'instructor' || userRole === 'admin') && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => {
+                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
+                            handleDeleteEvent(classItem);
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                     {classItem.status === 'Completed' ? (
                       <button
                         className="btn btn-secondary btn-sm d-flex align-items-center gap-1"
@@ -1457,18 +1482,6 @@ function Schedule() {
                       >
                         <Bell size={16} />
                         Remind
-                      </button>
-                    )}
-                    {(userRole === 'instructor' || userRole === 'admin') && userProfile && userProfile._id && classItem.createdByUserId && classItem.createdByUserId.toString() === userProfile._id.toString() && (
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
-                            handleDeleteEvent(classItem);
-                          }
-                        }}
-                      >
-                        Delete
                       </button>
                     )}
                   </div>

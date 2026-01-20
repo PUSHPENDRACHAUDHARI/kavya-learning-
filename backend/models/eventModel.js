@@ -56,6 +56,11 @@ const eventSchema = new mongoose.Schema({
     course: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Course'
+    },
+    deletedByRole: {
+        type: String,
+        enum: ['student', 'parent', 'instructor', 'admin', 'sub-admin'],
+        default: null
     }
 }, {
     timestamps: true
