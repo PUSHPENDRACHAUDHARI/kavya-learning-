@@ -10,7 +10,7 @@ import {
   LuGalleryHorizontalEnd,
 } from "react-icons/lu";
 import { TbReportAnalytics } from "react-icons/tb";
-import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement } from "react-icons/md";
+import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement, MdSettings } from "react-icons/md";
 import { MdAutoStories } from "react-icons/md";
 import { AiOutlineBook } from "react-icons/ai";
 import logo from "../assets/logo.png";
