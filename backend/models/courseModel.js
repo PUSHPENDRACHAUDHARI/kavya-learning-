@@ -46,7 +46,13 @@ const courseSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        required: true
+        required: true,
+        validate: {
+            validator: function(v) {
+                return /^[^@#$%!]*$/.test(v);
+            },
+            message: props => `${props.value} contains special characters!`
+        }
     },
     resourceUrl: {
         type: String,

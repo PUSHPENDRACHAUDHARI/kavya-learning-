@@ -91,7 +91,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
     <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
       <input type="text" name="title" placeholder="Course Title" value={formData.title} onChange={handleChange} required className="form-control" style={{ gridColumn: '1 / -1' }} />
       <textarea name="description" placeholder="Description" value={formData.description} onChange={handleChange} className="form-control" style={{ gridColumn: '1 / -1', minHeight: '100px' }}></textarea>
-      <input type="text" name="category" placeholder="Category" value={formData.category} onChange={handleChange} required className="form-control" />
+      <input type="text" name="category" placeholder="Category" value={formData.category} onChange={handleChange} required className="form-control" pattern="[^@#$%!]*" title="Category cannot contain special characters (@, #, $, %, !)" />
       <select name="level" value={formData.level} onChange={handleChange} className="form-control">
         <option value="Beginner">Beginner</option>
         <option value="Intermediate">Intermediate</option>

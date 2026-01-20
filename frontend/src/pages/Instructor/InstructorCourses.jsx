@@ -242,7 +242,9 @@ const InstructorCourses = () => {
                 value={formData.category} 
                 onChange={handleChange} 
                 required 
-                className="form-control" 
+                className="form-control"
+                pattern="[^@#$%!]*"
+                title="Category cannot contain special characters (@, #, $, %, !)"
               />
               <input 
                 type="number" 
