@@ -132,6 +132,33 @@ export async function deleteAnnouncement(announcementId) {
 }
 
 /**
+ * Update an announcement by ID
+ * @param {string} announcementId
+ * @param {Object} updateData - {message, image, imageName, video, videoName, file, fileName}
+ */
+export async function updateAnnouncement(announcementId, updateData) {
+  try {
+    const res = await fetch(`${BASE}/admin/announcements/${announcementId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(updateData),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = (body && body.message) || `Request failed with status ${res.status}`;
+      const err = new Error(msg);
+      err.status = res.status;
+      err.body = body;
+      throw err;
+    }
+    return body;
+  } catch (error) {
+    console.error('Error updating announcement:', error);
+    throw error;
+  }
+}
+
+/**
  * Get public announcements (for students/public users)
  */
 export async function getPublicAnnouncements() {

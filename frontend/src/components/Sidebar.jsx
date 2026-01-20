@@ -228,7 +228,21 @@ function Sidebar({ isOpen, setIsOpen }) {
                       backgroundColor: isActive ? '#2b6cb0' : (highlightCond ? '#f0f0f0' : 'inherit'),
                     };
                   }}
-                  onClick={() => isMobile && setIsOpen(false)}
+                  onClick={() => {
+                    isMobile && setIsOpen(false);
+                    // Clear announcement badge when user clicks on announcements
+                    if (isAnnouncementLink) {
+                      if (userRole === 'instructor') {
+                        localStorage.setItem('instructorLastSeenAnnouncementCount', '999999');
+                      } else if (userRole === 'parent') {
+                        localStorage.setItem('parentLastSeenAnnouncementCount', '999999');
+                      } else if (userRole === 'admin' || userRole === 'sub-admin') {
+                        localStorage.setItem('adminLastSeenAnnouncementCount', '999999');
+                      } else {
+                        localStorage.setItem('studentLastSeenAnnouncementCount', '999999');
+                      }
+                    }
+                  }}
                 >
                   {(() => {
                     const iconIsStudentReport = item.path === '/parent/student-report';

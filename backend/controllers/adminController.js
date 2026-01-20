@@ -439,6 +439,45 @@ exports.listAnnouncements = async (req, res) => {
   }
 };
 
+exports.updateAnnouncement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message, image, imageName, video, videoName, file, fileName } = req.body;
+
+    // Find the announcement
+    const announcement = await Announcement.findById(id);
+    if (!announcement) {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    // Update fields if provided
+    if (message !== undefined) announcement.message = message;
+    if (image !== undefined) announcement.image = image;
+    if (imageName !== undefined) announcement.imageName = imageName;
+    if (video !== undefined) announcement.video = video;
+    if (videoName !== undefined) announcement.videoName = videoName;
+    if (file !== undefined) announcement.file = file;
+    if (fileName !== undefined) announcement.fileName = fileName;
+
+    // Save the updated announcement
+    const updatedAnnouncement = await announcement.save();
+
+    // Log the activity
+    await ActivityLog.create({
+      action: 'update_announcement',
+      performedBy: req.user._id,
+      targetType: 'Announcement',
+      targetId: id,
+      details: { message, image, video, file }
+    });
+
+    res.json(updatedAnnouncement);
+  } catch (err) {
+    console.error('updateAnnouncement error:', err);
+    res.status(400).json({ message: err.message || 'Error updating announcement' });
+  }
+};
+
 exports.deleteAnnouncement = async (req, res) => {
   try {
     const a = await Announcement.findByIdAndDelete(req.params.id);

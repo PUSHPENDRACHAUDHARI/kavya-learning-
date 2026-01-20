@@ -37,6 +37,7 @@ router.delete('/enrollments/:id', protect, authorize('admin'), admin.deleteEnrol
 // Announcements
 router.post('/announcements', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.createAnnouncement);
 router.get('/announcements', protect, authorize('admin','sub-admin'), admin.listAnnouncements);
+router.put('/announcements/:id', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.updateAnnouncement);
 router.delete('/announcements/:id', protect, authorize('admin'), admin.deleteAnnouncement);
 
 // Notes (Admin) - upload, list, delete

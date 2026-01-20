@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/AppLayout';
-import { createAnnouncement, listAnnouncements, deleteAnnouncement } from '../../api/announcementService';
+import { createAnnouncement, listAnnouncements, deleteAnnouncement, updateAnnouncement, uploadFile } from '../../api/announcementService';
 import './AdminAnnouncements.css';
 
 const AdminAnnouncements = () => {
@@ -285,29 +285,75 @@ const AdminAnnouncements = () => {
     setEditFilePreview(null);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editText.trim() && !editImagePreview && !editVideoPreview && !editFilePreview) {
       return;
     }
 
-    const updatedMessages = messages.map(msg => {
-      if (msg._id === editingId) {
-        return {
-          ...msg,
-          text: editText.trim(),
-          image: editImagePreview,
-          video: editVideoPreview,
-          file: editFilePreview,
-          edited: true,
-          editedAt: new Date().toISOString()
-        };
-      }
-      return msg;
-    });
+    try {
+      setSending(true);
 
-    setMessages(updatedMessages);
-    localStorage.setItem('adminAnnouncements', JSON.stringify(updatedMessages));
-    cancelEdit();
+      // Prepare update payload
+      const updatePayload = {
+        message: editText.trim(),
+      };
+
+      // If new image was selected, upload it
+      if (editImage) {
+        const uploadResult = await uploadFile(editImage);
+        updatePayload.image = uploadResult.url;
+        updatePayload.imageName = uploadResult.original_filename;
+      } else if (editImagePreview === null) {
+        updatePayload.image = null;
+      }
+
+      // If new video was selected, upload it
+      if (editVideo) {
+        const uploadResult = await uploadFile(editVideo);
+        updatePayload.video = uploadResult.url;
+        updatePayload.videoName = uploadResult.original_filename;
+      } else if (editVideoPreview === null) {
+        updatePayload.video = null;
+      }
+
+      // If new file was selected, upload it
+      if (editFile) {
+        const uploadResult = await uploadFile(editFile);
+        updatePayload.file = uploadResult.url;
+        updatePayload.fileName = uploadResult.original_filename;
+      } else if (editFilePreview === null) {
+        updatePayload.file = null;
+      }
+
+      // Call API to update announcement
+      const updatedAnnouncement = await updateAnnouncement(editingId, updatePayload);
+
+      // Update local messages list
+      const updatedMessages = messages.map(msg => {
+        if (msg._id === editingId) {
+          return {
+            ...msg,
+            message: updatedAnnouncement.message || msg.message,
+            image: updatedAnnouncement.image || msg.image,
+            video: updatedAnnouncement.video || msg.video,
+            file: updatedAnnouncement.file || msg.file,
+            fileName: updatedAnnouncement.fileName || msg.fileName,
+            edited: true,
+            editedAt: new Date().toISOString()
+          };
+        }
+        return msg;
+      });
+
+      setMessages(updatedMessages);
+      alert('✅ Announcement updated successfully!');
+      cancelEdit();
+    } catch (err) {
+      console.error('Error saving edit:', err);
+      alert('Failed to update announcement: ' + (err.message || 'Unknown error'));
+    } finally {
+      setSending(false);
+    }
   };
 
   const cancelEdit = () => {
@@ -350,6 +396,13 @@ const AdminAnnouncements = () => {
                       {new Date(msg.createdAt).toLocaleString()}
                     </span>
                     <div className="message-actions">
+                      <button
+                        className="edit-btn"
+                        onClick={() => handleEditMessage(msg)}
+                        title="Edit announcement"
+                      >
+                        ✎
+                      </button>
                       <button
                         className="delete-btn"
                         onClick={() => handleDeleteMessage(msg._id)}
