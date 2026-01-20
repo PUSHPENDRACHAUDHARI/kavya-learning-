@@ -150,6 +150,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
           onAdd({
             title: res.title,
             instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || form.instructor,
+            createdByUserId: res.createdByUserId && (res.createdByUserId._id || res.createdByUserId) ? (res.createdByUserId._id || res.createdByUserId).toString() : null,
+            createdByRole: res.createdByRole || null,
             date: res.date ? new Date(res.date).toLocaleDateString() : form.date,
             time: `${res.startTime || form.startTime} - ${res.endTime || form.endTime}`,
             location: res.location || (form.location || 'Online'),
@@ -483,6 +485,8 @@ function Schedule() {
             time: e.startTime || 'TBD',
             title: e.title,
             instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
+            createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+            createdByRole: e.createdByRole || null,
             date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
             location: e.location || 'Online',
             students: getStudentsText(e),
@@ -766,6 +770,9 @@ function Schedule() {
           time: e.startTime || 'TBD',
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+          createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+          createdByRole: e.createdByRole || null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           location: e.location || 'Online',
           students: getStudentsText(e),
@@ -791,6 +798,9 @@ function Schedule() {
         const mapped = (res.upcoming || []).map((e) => ({
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+          createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+          createdByRole: e.createdByRole || null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
@@ -799,20 +809,35 @@ function Schedule() {
           status: e.status || 'Scheduled',
           _id: e._id
         }));
-        // Preserve any locally-created events that haven't expired and are not duplicated by server
+        // Preserve any locally-created events that haven't expired.
+        // If the server returns a duplicate (same title+date+time) but the local
+        // copy is the creator's local copy (has _local + createdByUserId equal
+        // to current user), prefer the local copy so owner-only actions remain.
         const now = Date.now();
         const storedLocal = loadLocalEventsFromStorage();
-        const localKeep = (storedLocal || []).filter(l => l && l._local).filter(l => {
+        const validLocal = (storedLocal || []).filter(l => l && l._local).filter(l => {
           try {
-            if (!l.localExpiresAt) return true; // keep if unknown
+            if (!l.localExpiresAt) return true;
             return new Date(l.localExpiresAt).getTime() > now;
           } catch (err) { return true; }
-        }).filter(local => {
-          // avoid duplicates: same title+date+time
-          return !mapped.some(m => m.title === local.title && m.date === local.date && m.time === local.time);
         });
 
-        setUpcomingClasses([...mapped, ...localKeep]);
+        // Replace server items with matching local creator copies when appropriate
+        const localMap = new Map((validLocal || []).map(l => [eventKey(l), l]));
+        const merged = mapped.map(m => {
+          try {
+            const key = eventKey(m);
+            const match = localMap.get(key);
+            if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
+              return { ...match };
+            }
+          } catch (err) { /* ignore and fall back to server item */ }
+          return m;
+        });
+
+        // Add any valid local items that don't have a server duplicate
+        const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
+        setUpcomingClasses([...merged, ...localOnly]);
         
         // Fetch reminders from backend notifications
         await fetchRemindersFromBackend();
@@ -823,6 +848,7 @@ function Schedule() {
         const mapped = res.map((e) => ({
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
@@ -862,6 +888,43 @@ function Schedule() {
   };
 
   // --- Local events persistence & background sync helpers ---
+  const normalizeDateForKey = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d)) return (dateStr || '').toString().trim();
+      return d.toISOString().split('T')[0];
+    } catch (e) { return (dateStr || '').toString().trim(); }
+  };
+
+  const normalizeTimeForKey = (timeStr) => {
+    try {
+      if (!timeStr) return '';
+      const parts = timeStr.split('-').map(p => p.trim());
+      const fmt = parts.map(p => {
+        // parse like "1:00 PM" or "13:00"
+        const m = p.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (m) {
+          let hh = parseInt(m[1], 10);
+          const mm = parseInt(m[2], 10);
+          const mer = (m[3] || '').toUpperCase();
+          if (mer === 'PM' && hh < 12) hh += 12;
+          if (mer === 'AM' && hh === 12) hh = 0;
+          return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+        }
+        return p.replace(/\s+/g,' ').toLowerCase();
+      });
+      return fmt.join('-');
+    } catch (e) { return (timeStr || '').toString().trim(); }
+  };
+
+  const eventKey = (e) => {
+    try {
+      const t = (e.title || '').toString().trim().toLowerCase();
+      const d = normalizeDateForKey(e.date || e.dateString || '');
+      const ti = normalizeTimeForKey(e.time || `${e.startTime || ''} - ${e.endTime || ''}`);
+      return `${t}|${d}|${ti}`;
+    } catch (err) { return `${(e.title||'').toString()}`; }
+  };
   const loadLocalEventsFromStorage = () => {
     try {
       const raw = window.localStorage.getItem(LOCAL_EVENTS_KEY);
@@ -952,7 +1015,10 @@ function Schedule() {
             // map server event to display format
             const serverEvt = {
               title: res.title,
-              instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || ev.instructor,
+                instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || ev.instructor,
+                instructorId: res.instructor && (res.instructor._id || res.instructor) ? (res.instructor._id || res.instructor).toString() : (ev.instructorId || null),
+                createdByUserId: res.createdByUserId && (res.createdByUserId._id || res.createdByUserId) ? (res.createdByUserId._id || res.createdByUserId).toString() : (ev.createdByUserId || null),
+                createdByRole: res.createdByRole || ev.createdByRole || null,
               date: res.date ? new Date(res.date).toLocaleDateString() : ev.date,
               time: `${res.startTime || ev.time?.split('-')[0]?.trim() || 'TBD'} - ${res.endTime || ev.time?.split('-')[1]?.trim() || 'TBD'}`,
               location: res.location || ev.location || 'Online',
@@ -962,9 +1028,13 @@ function Schedule() {
               _id: res._id
             };
 
-            // Replace local event in upcomingClasses state
+            // Replace local event in upcomingClasses state (use normalized key)
             setUpcomingClasses(prev => {
-              const withoutLocal = (prev || []).filter(p => !(p._local && p.title === ev.title && p.date === ev.date && p.time === ev.time));
+              const withoutLocal = (prev || []).filter(p => {
+                try {
+                  return p._local && eventKey(p) === eventKey(ev);
+                } catch (err) { return !(p._local && p.title === ev.title && p.date === ev.date && p.time === ev.time); }
+              }).filter(p => !(p && p._local && eventKey(p) === eventKey(ev)));
               return [serverEvt, ...withoutLocal];
             });
 
@@ -993,8 +1063,13 @@ function Schedule() {
           const prevList = prev || [];
           const merged = [...prevList];
           stored.forEach(le => {
-            const exists = merged.some(m => m.title === le.title && m.date === le.date && m.time === le.time);
-            if (!exists) merged.unshift(le);
+            try {
+              const exists = merged.some(m => eventKey(m) === eventKey(le));
+              if (!exists) merged.unshift(le);
+            } catch (err) {
+              const exists = merged.some(m => m.title === le.title && m.date === le.date && m.time === le.time);
+              if (!exists) merged.unshift(le);
+            }
           });
           setUpcomingCount((merged.length || 0));
           return merged;
@@ -1014,6 +1089,38 @@ function Schedule() {
 
     return () => clearInterval(syncInterval);
   }, []);
+
+  // Allow owner (instructor/admin) to delete their own events
+  const handleDeleteEvent = async (evt) => {
+    try {
+      if (!evt) return;
+      // If event exists on server, request deletion
+      if (evt._id) {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/events/${evt._id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : undefined,
+          },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Failed to delete event');
+          return;
+        }
+      }
+
+      // Remove locally (from state and localStorage)
+      setUpcomingClasses(prev => (prev || []).filter(p => !(p._id && evt._id && p._id === evt._id) && !(p.title === evt.title && p.date === evt.date && p.time === evt.time)));
+      setClasses(prev => (prev || []).filter(c => !(c._id && evt._id && c._id === evt._id) && !(c.title === evt.title && c.date === evt.date && c.time === evt.time)));
+      removeLocalEventFromStorage(evt);
+      setUpcomingCount(c => Math.max(0, (c || 0) - 1));
+    } catch (err) {
+      console.warn('Failed to delete event', err);
+      alert('Failed to delete event: ' + (err.message || err));
+    }
+  };
 
   // Fetch reminders from backend notifications
   const fetchRemindersFromBackend = async () => {
@@ -1175,13 +1282,15 @@ function Schedule() {
                 </p>
               </div>
  
-              <button
-                className="btn btn-event d-flex align-items-center gap-2"
-                onClick={() => { setPresetDate(currentDate); setIsAddOpen(true); }}
-              >
-                <Calendar size={20} />
-                Add Event
-              </button>
+              {userRole !== 'student' && (
+                <button
+                  className="btn btn-event d-flex align-items-center gap-2"
+                  onClick={() => { setPresetDate(currentDate); setIsAddOpen(true); }}
+                >
+                  <Calendar size={20} />
+                  Add Event
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1350,6 +1459,18 @@ function Schedule() {
                         Remind
                       </button>
                     )}
+                    {(userRole === 'instructor' || userRole === 'admin') && userProfile && userProfile._id && classItem.createdByUserId && classItem.createdByUserId.toString() === userProfile._id.toString() && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => {
+                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
+                            handleDeleteEvent(classItem);
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1485,6 +1606,12 @@ function Schedule() {
 
             // Normalize students display: prefer existing, otherwise derive from maxStudents
             const normalized = { ...evt };
+            // Attach owner id to local events so we can show owner-only actions
+            try {
+              if (!normalized.instructorId && userProfile && userProfile._id) normalized.instructorId = userProfile._id.toString();
+              if (!normalized.createdByUserId && userProfile && userProfile._id) normalized.createdByUserId = userProfile._id.toString();
+              if (!normalized.createdByRole && userRole) normalized.createdByRole = userRole;
+            } catch (e) {}
             if (!normalized.students) normalized.students = getStudentsText(normalized);
 
             setClasses((prev) => [...prev, normalized]);

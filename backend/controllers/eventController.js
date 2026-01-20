@@ -200,10 +200,11 @@ const deleteEvent = asyncHandler(async (req, res) => {
         throw new Error('Event not found');
     }
 
-    // Check if user is instructor of the event or admin
-    if (event.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    // Only the user who created the event may delete it.
+    // This enforces that Admin/Instructor can only delete events they personally created.
+    if (!event.createdByUserId || event.createdByUserId.toString() !== req.user._id.toString()) {
         res.status(403);
-        throw new Error('Not authorized to delete this event');
+        throw new Error('Forbidden: only the creator may delete this event');
     }
 
     await event.remove();

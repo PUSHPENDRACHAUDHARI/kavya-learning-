@@ -303,6 +303,43 @@ function Schedule() {
       return '0 students';
     }
   };
+
+  const normalizeDateForKey = (dateStr) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d)) return (dateStr || '').toString().trim();
+      return d.toISOString().split('T')[0];
+    } catch (e) { return (dateStr || '').toString().trim(); }
+  };
+
+  const normalizeTimeForKey = (timeStr) => {
+    try {
+      if (!timeStr) return '';
+      const parts = timeStr.split('-').map(p => p.trim());
+      const fmt = parts.map(p => {
+        const m = p.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (m) {
+          let hh = parseInt(m[1], 10);
+          const mm = parseInt(m[2], 10);
+          const mer = (m[3] || '').toUpperCase();
+          if (mer === 'PM' && hh < 12) hh += 12;
+          if (mer === 'AM' && hh === 12) hh = 0;
+          return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+        }
+        return p.replace(/\s+/g,' ').toLowerCase();
+      });
+      return fmt.join('-');
+    } catch (e) { return (timeStr || '').toString().trim(); }
+  };
+
+  const eventKey = (e) => {
+    try {
+      const t = (e.title || '').toString().trim().toLowerCase();
+      const d = normalizeDateForKey(e.date || e.dateString || '');
+      const ti = normalizeTimeForKey(e.time || `${e.startTime || ''} - ${e.endTime || ''}`);
+      return `${t}|${d}|${ti}`;
+    } catch (err) { return `${(e.title||'').toString()}`; }
+  };
   // compute local expiry for locally-persisted events based on end time
   const computeLocalExpiry = (dateStr, timeStr) => {
     try {
@@ -637,6 +674,7 @@ function Schedule() {
           time: e.startTime || 'TBD',
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           location: e.location || 'Online',
           students: getStudentsText(e),
@@ -662,6 +700,9 @@ function Schedule() {
         const mapped = (res.upcoming || []).map((e) => ({
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+          createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+          createdByRole: e.createdByRole || null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
@@ -670,7 +711,33 @@ function Schedule() {
           status: e.status || 'Scheduled',
           _id: e._id
         }));
-        setUpcomingClasses(mapped);
+
+        // Preserve any locally-created events that haven't expired.
+        const now = Date.now();
+        const storedLocal = loadLocalEventsFromStorage();
+        const validLocal = (storedLocal || []).filter(l => l && l._local).filter(l => {
+          try {
+            if (!l.localExpiresAt) return true;
+            return new Date(l.localExpiresAt).getTime() > now;
+          } catch (err) { return true; }
+        });
+
+        // Replace server items with matching local creator copies when appropriate
+        const localMap = new Map((validLocal || []).map(l => [eventKey(l), l]));
+        const merged = mapped.map(m => {
+          try {
+            const key = eventKey(m);
+            const match = localMap.get(key);
+            if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
+              return { ...match };
+            }
+          } catch (err) { }
+          return m;
+        });
+
+        const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
+        setUpcomingCount((mapped.length || 0) + localOnly.length);
+        setUpcomingClasses([...merged, ...localOnly]);
         
         // Fetch reminders from backend notifications
         await fetchRemindersFromBackend();
@@ -682,6 +749,7 @@ function Schedule() {
         setUpcomingClasses(res.map((e) => ({
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
           location: e.location || 'Online',
@@ -865,13 +933,15 @@ function Schedule() {
                 </p>
               </div>
  
-              <button
-                className="btn btn-event d-flex align-items-center gap-2"
-                onClick={() => { setPresetDate(currentDate); setIsAddOpen(true); }}
-              >
-                <Calendar size={20} />
-                Add Event
-              </button>
+              {userRole !== 'student' && (
+                <button
+                  className="btn btn-event d-flex align-items-center gap-2"
+                  onClick={() => { setPresetDate(currentDate); setIsAddOpen(true); }}
+                >
+                  <Calendar size={20} />
+                  Add Event
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1038,6 +1108,45 @@ function Schedule() {
                       >
                         <Bell size={16} />
                         Remind
+                      </button>
+                    )}
+                    {(userRole === 'instructor' || userRole === 'admin') && userProfile && userProfile._id && classItem.createdByUserId && classItem.createdByUserId.toString() === userProfile._id.toString() && (
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => {
+                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
+                            // simple client-side delete via API
+                            (async () => {
+                              try {
+                                if (classItem._id) {
+                                  const token = localStorage.getItem('token');
+                                  const resp = await fetch(`/api/events/${classItem._id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : undefined } });
+                                  if (!resp.ok) {
+                                    const d = await resp.json().catch(() => ({}));
+                                    alert(d.message || 'Failed to delete event');
+                                    return;
+                                  }
+                                }
+                                // remove locally (use normalized key)
+                                setUpcomingClasses(prev => (prev || []).filter(p => {
+                                  try { return !(p._id && classItem._id && p._id === classItem._id) && !(p._local && eventKey(p) === eventKey(classItem)); }
+                                  catch (err) { return !(p._id && classItem._id && p._id === classItem._id) && !(p.title === classItem.title && p.date === classItem.date && p.time === classItem.time); }
+                                }));
+                                setClasses(prev => (prev || []).filter(c => {
+                                  try { return !(c._id && classItem._id && c._id === classItem._id) && !(c._local && eventKey(c) === eventKey(classItem)); }
+                                  catch (err) { return !(c._id && classItem._id && c._id === classItem._id) && !(c.title === classItem.title && c.date === classItem.date && c.time === classItem.time); }
+                                }));
+                                removeLocalEventFromStorage(classItem);
+                                setUpcomingCount(c => Math.max(0, (c || 0) - 1));
+                              } catch (err) {
+                                console.warn('Failed to delete event', err);
+                                alert('Failed to delete event: ' + (err.message || err));
+                              }
+                            })();
+                          }
+                        }}
+                      >
+                        Delete
                       </button>
                     )}
                   </div>
@@ -1207,6 +1316,7 @@ function Schedule() {
 
               // Normalize students display: prefer existing, otherwise derive from maxStudents
               const normalized = { ...evt };
+              try { if (!normalized.instructorId && userProfile && userProfile._id) normalized.instructorId = userProfile._id.toString(); } catch (e) {}
               if (!normalized.students) normalized.students = getStudentsText(normalized);
 
               setClasses((prev) => [...prev, normalized]);
