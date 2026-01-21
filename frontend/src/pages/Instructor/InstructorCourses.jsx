@@ -16,7 +16,7 @@ const InstructorCourses = () => {
     description: '',
     category: '',
     level: 'Beginner',
-    price: 0,
+    price: '',
     duration: '',
     thumbnail: ''
   });
@@ -67,17 +67,34 @@ const InstructorCourses = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validate price to prevent negative values
+    if (name === 'price') {
+      const numValue = parseFloat(value);
+      if (value !== '' && numValue < 0) {
+        alert('Price must be greater than or equal to 0');
+        return;
+      }
+    }
+    
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Convert duration string to number if it contains units (e.g., "3 hours" -> 3)
+      const durationData = { ...formData };
+      if (typeof durationData.duration === 'string' && durationData.duration.trim() !== '') {
+        const match = durationData.duration.match(/^(\d+(?:\.\d+)?)/);
+        durationData.duration = match ? parseFloat(match[1]) : durationData.duration;
+      }
+
       let courseRes;
       if (editingCourse) {
-        courseRes = await axiosClient.put(`/api/instructor/courses/${editingCourse._id}`, formData);
+        courseRes = await axiosClient.put(`/api/instructor/courses/${editingCourse._id}`, durationData);
       } else {
-        courseRes = await axiosClient.post('/api/instructor/courses', formData);
+        courseRes = await axiosClient.post('/api/instructor/courses', durationData);
       }
       const created = courseRes.data && (courseRes.data.data || courseRes.data);
       // If a PDF was selected, upload it for this course
@@ -109,7 +126,7 @@ const InstructorCourses = () => {
         description: '',
         category: '',
         level: 'Beginner',
-        price: 0,
+        price: '',
         duration: '',
         thumbnail: ''
       });
@@ -190,7 +207,7 @@ const InstructorCourses = () => {
         description: '',
         category: '',
         level: 'Beginner',
-        price: 0,
+        price: '',
         duration: '',
         thumbnail: ''
       });
@@ -269,6 +286,8 @@ const InstructorCourses = () => {
                 placeholder="Price" 
                 value={formData.price} 
                 onChange={handleChange} 
+                min="0" 
+                step="0.01"
                 className="form-control" 
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
