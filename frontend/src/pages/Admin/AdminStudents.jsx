@@ -318,14 +318,7 @@ const AdminStudents = () => {
               </td>
 
               {/* BLOCK / UNBLOCK ACTION */}
-              <td>
-                {/* Show current block status */}
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Account:</strong>{' '}
-                  <span className={`badge bg-${s.user_status === 'Blocked' ? 'danger' : 'success'}`}>
-                    {s.user_status || 'Active'}
-                  </span>
-                </div>
+              <td style={{ textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
                 {/* Block / Unblock button */}
                 {s.user_status === 'Blocked' ? (
                   <button

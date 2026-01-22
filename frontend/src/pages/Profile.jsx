@@ -488,24 +488,24 @@ export default function Profile() {
                 <img 
                   src={profile.avatar} 
                   alt={profile.name}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
                 />
               ) : profile.gender === 'female' || effectiveGender === 'female' ? (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '50%' }}>
                   <img 
                     src={avatarFemale} 
                     alt="female avatar"
-                    style={{ width: '90%', height: '90%' }}
+                    style={{ width: '90%', height: '90%', borderRadius: '50%' }}
                   />
                 </div>
               ) : profile.gender === 'male' || effectiveGender === 'male' ? (
                 <img
                   src={profileAvatar}
                   alt="male avatar"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
                 />
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', fontSize: '18px', fontWeight: 'bold', color: 'white' }}>
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', fontSize: '18px', fontWeight: 'bold', color: 'white', borderRadius: '50%' }}>
                   {profile.initials}
                 </div>
               )}
@@ -754,6 +754,7 @@ export default function Profile() {
                 height: "80px",
                 borderRadius: "50%",
                 objectFit: "cover",
+                display: "block"
               }}
             />
             <div>
