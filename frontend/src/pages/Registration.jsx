@@ -12,6 +12,7 @@ function Registration() {
     gender: "",
     address: "",
     location: "",
+    age: "",
     password: "",
     confirmPassword: "",
     role: "student",
@@ -58,6 +59,7 @@ function Registration() {
           gender: formData.gender,
           address: formData.address,
           location: formData.location,
+          age: formData.age || null,
           password: formData.password,
           role: formData.role,
         }),
@@ -224,6 +226,21 @@ function Registration() {
               <option value="instructor">Instructor</option>
               <option value="parent">Parent</option>
             </select>
+
+            {/* Age - Only visible for students */}
+            {formData.role === "student" && (
+              <input
+                type="number"
+                placeholder="Age"
+                className="input-field"
+                name="age"
+                value={formData.age}
+                onChange={handleChange}
+                min="1"
+                max="120"
+                required
+              />
+            )}
 
             <input
               type="password"

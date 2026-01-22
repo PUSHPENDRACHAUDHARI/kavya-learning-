@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
+import '../../assets/Subscription.css';
 import './StudentCourses.css';
 
 const StudentEnrolledCourses = () => {
@@ -54,7 +55,9 @@ const StudentEnrolledCourses = () => {
               <div key={course._id} className="course-card">
                 {course.thumbnail && (
                   <div className="course-thumbnail">
+                    {(course.isPremium !== false) && <span className="premium-badge">PREMIUM</span>}
                     <img src={course.thumbnail} alt={course.title} />
+                    <span className="language-badge">{course.language || 'English'}</span>
                   </div>
                 )}
 

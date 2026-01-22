@@ -1391,6 +1391,9 @@ export default function Courses() {
   const [gettingStarted] = useState(initialGettingStarted);
   const [coreConcepts] = useState(initialCoreConcepts);
   const [practicalApplications] = useState(initialPracticalApplications);
+  // When a course has backend lessons, we will populate this and prefer it
+  // over the static demo arrays above.
+  const [courseLessons, setCourseLessons] = useState([]);
 
   // Course metadata (defaults to 0 when not available)
   const [enrolledCount, setEnrolledCount] = useState(0);
@@ -1788,11 +1791,59 @@ export default function Courses() {
           setEnrolledCourseTitle(title);
           try { window.localStorage.setItem('currentCourseTitle', title); } catch (e) {}
         }
+        // Helper: convert YouTube watch or short URLs to embed URLs
+        const toEmbedUrl = (raw) => {
+          if (!raw || typeof raw !== 'string') return '';
+          const s = raw.trim();
+          // If it's already an iframe HTML snippet, try to extract src
+          if (s.startsWith('<iframe')) {
+            const match = s.match(/src=["']([^"']+)["']/i);
+            if (match) return match[1];
+          }
+          // If it's already an embed URL, return as-is
+          if (s.includes('youtube.com/embed') || s.includes('player.vimeo.com') || s.startsWith('data:')) return s;
+          // Convert youtu.be short links -> embed
+          const shortMatch = s.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i);
+          if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}`;
+          // Convert standard watch?v= links to embed
+          const watchMatch = s.match(/[?&]v=([A-Za-z0-9_-]{6,})/i);
+          if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}`;
+          // If link contains /watch without query, try to parse last segment
+          try {
+            const u = new URL(s, window.location.origin);
+            const p = u.pathname.split('/').filter(Boolean);
+            const last = p[p.length - 1];
+            if (last && /^[A-Za-z0-9_-]{6,}$/.test(last)) {
+              return `https://www.youtube.com/embed/${last}`;
+            }
+          } catch (e) {}
+          return s;
+        };
+
+        // If backend returned lessons, map them into the shape used by this UI.
+        try {
+          if (course.lessons && Array.isArray(course.lessons) && course.lessons.length) {
+            const sorted = [...course.lessons].sort((a,b) => (a.order || 0) - (b.order || 0));
+            const mapped = sorted.map((l, idx) => ({
+              _id: l._id,
+              title: l.title || l.name || 'Untitled',
+              duration: typeof l.duration === 'number' ? `${l.duration} min` : (l.duration || 'N/A'),
+              status: idx === 0 ? 'Start' : 'Locked',
+              iconClass: idx === 0 ? 'bi-play-circle' : 'bi-lock-fill',
+              iconBgClass: idx === 0 ? 'lesson-icon' : 'muted-circle',
+              actionClass: idx === 0 ? 'lesson-action' : 'muted small',
+              videoLink: toEmbedUrl(l.videoUrl || l.videoLink || l.content || '')
+            }));
+            if (active) setCourseLessons(mapped);
+          }
+        } catch (e) {
+          // ignore mapping errors
+        }
       } catch (err) {
         // ignore errors
       }
     })();
-
+    
     return () => { active = false; };
   }, [location.search]);
 
@@ -2174,11 +2225,10 @@ export default function Courses() {
 
   // Compute course progress based on watched lessons
   // If not enrolled, progress should always be 0%
-  const totalLessons =
-    gettingStarted.length +
-    coreConcepts.length +
-    practicalApplications.length +
-    (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0);
+  // Prefer backend-provided lessons when available; otherwise fall back to demo arrays
+  const totalLessons = (courseLessons && courseLessons.length)
+    ? courseLessons.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0)
+    : gettingStarted.length + coreConcepts.length + practicalApplications.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0);
 
   const watchedCount = (enrolled && currentCourseId) ? getWatchedFor(currentCourseId).length : 0;
   let progressPercent = 0;
@@ -2197,12 +2247,15 @@ export default function Courses() {
 
 
   // Helper: Get all lessons in order across modules (for sequential unlocking)
-  const allLessonsInOrder = [
-    ...gettingStarted,
-    ...coreConcepts,
-    ...practicalApplications,
-    ...(newModules ? newModules.flatMap(m => m.lessons || []) : [])
-  ];
+  // Prefer backend lessons if present; otherwise use demo modules + newModules
+  const allLessonsInOrder = (courseLessons && courseLessons.length)
+    ? [...courseLessons, ...(newModules ? newModules.flatMap(m => m.lessons || []) : [])]
+    : [
+        ...gettingStarted,
+        ...coreConcepts,
+        ...practicalApplications,
+        ...(newModules ? newModules.flatMap(m => m.lessons || []) : [])
+      ];
 
   // Function to render a curriculum list with sequential unlocking
   const renderCurriculumList = (list, onVideoClick, moduleKey = null) => (
@@ -2460,9 +2513,14 @@ export default function Courses() {
                   const _watched = getWatchedFor(currentCourseId);
                   const lastWatched = _watched && _watched.length ? _watched[_watched.length - 1] : null;
 
-                  // Helper to find a lesson by title across modules
+                  // Helper to find a lesson by title across backend lessons, demo modules and newModules
                   const findLesson = (title) => {
                     if (!title) return null;
+                    // Prefer backend lessons
+                    if (courseLessons && courseLessons.length) {
+                      const found = courseLessons.find(l => l.title === title);
+                      if (found) return { lesson: found, module: 'backend' };
+                    }
                     // Search in Getting Started
                     let found = gettingStarted.find(l => l.title === title);
                     if (found) return { lesson: found, module: 'gettingStarted' };
@@ -2497,7 +2555,7 @@ export default function Courses() {
                       setCoreConceptsVideo(lesson.videoLink);
                       setCoreConceptsTitle(lesson.title);
                     } else {
-                      // practicalApplications and newModules use activeLessonVideo
+                      // backend, practicalApplications and newModules use activeLessonVideo
                       setActiveLessonVideo(lesson.videoLink);
                       setActiveLessonTitle(lesson.title);
                     }
@@ -2780,166 +2838,121 @@ export default function Courses() {
 
               {/* Module Panels */}
               <div className="module-panel">
-                {/* Module 1 */}
-                <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
-                  <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <i className="bi bi-folder-plus header-icon"></i>
-                      <strong>Getting Started</strong>
+                {courseLessons && courseLessons.length ? (
+                  // Render backend lessons as a single curriculum module
+                  <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
+                    <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="bi bi-folder-plus header-icon"></i>
+                        <strong>Curriculum</strong>
+                      </div>
+                      <div className="muted small">
+                        <i className="bi bi-clock me-1"></i> {courseLessons.length} lessons
+                      </div>
                     </div>
-                    <div className="muted small">
-                      <i className="bi bi-clock me-1"></i> 45 min
-                    </div>
-                  </div>
-                  {renderCurriculumList(gettingStarted, (lesson) => {
-                  setGettingStartedVideo(lesson.videoLink);
-                  setGettingStartedTitle(lesson.title);
-                  })}
-                {/* Video player shown inside Getting Started section */}
-                {gettingStartedVideo && (
-                  <div
-                    className="card"
-                    style={{ borderRadius: "15px", marginTop: "20px" }}
-                  >
-                    <div
-                      className="card-header bg-white d-flex justify-content-between align-items-center"
-                      style={{ borderColor: "white" }}
-                    >
-                      <h3 className="fw-normal mb-0">
-                        Now Playing: {gettingStartedTitle}
-                      </h3>
-                      <button
-                        className="view-btn"
-                        style={{ fontSize: "14px" }}
-                        onClick={() => {
-                          setGettingStartedVideo(null);
-                          setGettingStartedTitle("");
-                        }}
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <div style={{ marginTop: "15px" }}>
-                      <iframe
-                        width="100%"
-                        height="300"
-                        src={gettingStartedVideo}
-                        style={{ borderRadius: "10px" }}
-                        allow="autoplay; encrypted-media"
-                        title={gettingStartedTitle}
-                        allowFullScreen
-                      ></iframe>
-                    </div>
-                  </div>
-                )}
-                </div>
-                {/* Module 2 */}
-                <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
-                  <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <i className="bi bi-folder-plus header-icon"></i>
-                      <strong>Core Concepts</strong>
-                    </div>
-                    <div className="muted small">
-                      <i className="bi bi-clock me-1"></i> 1h 50 min
-                    </div>
-                  </div>
-                  {renderCurriculumList(coreConcepts, (lesson) => {
-                  setCoreConceptsVideo(lesson.videoLink);
-                  setCoreConceptsTitle(lesson.title);
-                })}
-                {/* Video player shown inside Core Concepts section */}
-                {coreConceptsVideo && (
-                  <div
-                    className="card"
-                    style={{ borderRadius: "15px", marginTop: "20px" }}
-                  >
-                    <div
-                      className="card-header bg-white d-flex justify-content-between align-items-center"
-                      style={{ borderColor: "white" }}
-                    >
-                      <h3 className="fw-normal mb-0">
-                        Now Playing: {coreConceptsTitle}
-                      </h3>
-                      <button
-                        className="view-btn"
-                        style={{ fontSize: "14px" }}
-                        onClick={() => {
-                          setCoreConceptsVideo(null);
-                          setCoreConceptsTitle("");
-                        }}
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <div style={{ marginTop: "15px" }}>
-                      <iframe
-                        width="100%"
-                        height="300"
-                        src={coreConceptsVideo}
-                        style={{ borderRadius: "10px" }}
-                        allow="autoplay; encrypted-media"
-                        title={coreConceptsTitle}
-                        allowFullScreen
-                      ></iframe>
-                    </div>
-                  </div>
-                )}
-                </div>
-                {/* Module 3 */}
-                <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
-                  <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <i className="bi bi-folder-plus header-icon"></i>
-                      <strong>Practical Applications</strong>
-                    </div>
-                    <div className="muted small">
-                      <i className="bi bi-clock me-1"></i> 2h 35 min
-                    </div>
-                  </div>
-                  {renderCurriculumList(practicalApplications, (lesson) => {
-                    setActiveLessonVideo(lesson.videoLink);
-                    setActiveLessonTitle(lesson.title);
-                  })}
-                {/* Video player shown inside Practical Applications section */}
-                {activeLessonVideo && (
-                  <div
-                    className="card"
-                    style={{ borderRadius: "15px", marginTop: "20px" }}
-                  >
-                    <div
-                      className="card-header bg-white d-flex justify-content-between align-items-center"
-                      style={{ borderColor: "white" }}
-                    >
-                      <h3 className="fw-normal mb-0">Now Playing: {activeLessonTitle}</h3>
-                      <button
-                        className="view-btn"
-                        style={{ fontSize: "14px" }}
-                        onClick={() => {
-                          setActiveLessonVideo(null);
-                          setActiveLessonTitle("");
-                        }}
-                      >
-                        Close
-                      </button>
-                    </div>
-                    <div style={{ marginTop: "15px" }}>
-                      <iframe
-                        width="100%"
-                        height="300"
-                        src={activeLessonVideo}
-                        style={{ borderRadius: "10px" }}
-                        allow="autoplay; encrypted-media"
-                        title={activeLessonTitle}
-                        allowFullScreen
-                      ></iframe>
-                    </div>
-                  </div>
-                )}
-                </div>
+                    {renderCurriculumList(courseLessons, (lesson) => {
+                      setActiveLessonVideo(lesson.videoLink);
+                      setActiveLessonTitle(lesson.title);
+                    })}
 
-                
+                    {/* Video player for backend lessons */}
+                    {activeLessonVideo && (
+                      <div className="card" style={{ borderRadius: "15px", marginTop: "20px" }}>
+                        <div className="card-header bg-white d-flex justify-content-between align-items-center" style={{ borderColor: "white" }}>
+                          <h3 className="fw-normal mb-0">Now Playing: {activeLessonTitle}</h3>
+                          <button className="view-btn" style={{ fontSize: "14px" }} onClick={() => { setActiveLessonVideo(null); setActiveLessonTitle(""); }}>
+                            Close
+                          </button>
+                        </div>
+                        <div style={{ marginTop: "15px" }}>
+                          <iframe width="100%" height="300" src={activeLessonVideo} style={{ borderRadius: "10px" }} allow="autoplay; encrypted-media" title={activeLessonTitle} allowFullScreen></iframe>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Fallback: demo modules when backend lessons not available
+                  <>
+                    {/* Module 1 */}
+                    <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
+                      <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
+                        <div className="d-flex align-items-center gap-2">
+                          <i className="bi bi-folder-plus header-icon"></i>
+                          <strong>Getting Started</strong>
+                        </div>
+                        <div className="muted small">
+                          <i className="bi bi-clock me-1"></i> 45 min
+                        </div>
+                      </div>
+                      {renderCurriculumList(gettingStarted, (lesson) => {
+                        setGettingStartedVideo(lesson.videoLink);
+                        setGettingStartedTitle(lesson.title);
+                      })}
+                      {/* Video player shown inside Getting Started section */}
+                      {gettingStartedVideo && (
+                        <div className="card" style={{ borderRadius: "15px", marginTop: "20px" }}>
+                          <div className="card-header bg-white d-flex justify-content-between align-items-center" style={{ borderColor: "white" }}>
+                            <h3 className="fw-normal mb-0">Now Playing: {gettingStartedTitle}</h3>
+                            <button className="view-btn" style={{ fontSize: "14px" }} onClick={() => { setGettingStartedVideo(null); setGettingStartedTitle(""); }}>Close</button>
+                          </div>
+                          <div style={{ marginTop: "15px" }}>
+                            <iframe width="100%" height="300" src={gettingStartedVideo} style={{ borderRadius: "10px" }} allow="autoplay; encrypted-media" title={gettingStartedTitle} allowFullScreen></iframe>
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
+                    {/* Module 2 */}
+                    <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
+                      <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
+                        <div className="d-flex align-items-center gap-2">
+                          <i className="bi bi-folder-plus header-icon"></i>
+                          <strong>Core Concepts</strong>
+                        </div>
+                        <div className="muted small">
+                          <i className="bi bi-clock me-1"></i> 1h 50 min
+                        </div>
+                      </div>
+                      {renderCurriculumList(coreConcepts, (lesson) => { setCoreConceptsVideo(lesson.videoLink); setCoreConceptsTitle(lesson.title); })}
+                      {coreConceptsVideo && (
+                        <div className="card" style={{ borderRadius: "15px", marginTop: "20px" }}>
+                          <div className="card-header bg-white d-flex justify-content-between align-items-center" style={{ borderColor: "white" }}>
+                            <h3 className="fw-normal mb-0">Now Playing: {coreConceptsTitle}</h3>
+                            <button className="view-btn" style={{ fontSize: "14px" }} onClick={() => { setCoreConceptsVideo(null); setCoreConceptsTitle(""); }}>Close</button>
+                          </div>
+                          <div style={{ marginTop: "15px" }}>
+                            <iframe width="100%" height="300" src={coreConceptsVideo} style={{ borderRadius: "10px" }} allow="autoplay; encrypted-media" title={coreConceptsTitle} allowFullScreen></iframe>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Module 3 */}
+                    <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
+                      <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
+                        <div className="d-flex align-items-center gap-2">
+                          <i className="bi bi-folder-plus header-icon"></i>
+                          <strong>Practical Applications</strong>
+                        </div>
+                        <div className="muted small">
+                          <i className="bi bi-clock me-1"></i> 2h 35 min
+                        </div>
+                      </div>
+                      {renderCurriculumList(practicalApplications, (lesson) => { setActiveLessonVideo(lesson.videoLink); setActiveLessonTitle(lesson.title); })}
+                      {activeLessonVideo && (
+                        <div className="card" style={{ borderRadius: "15px", marginTop: "20px" }}>
+                          <div className="card-header bg-white d-flex justify-content-between align-items-center" style={{ borderColor: "white" }}>
+                            <h3 className="fw-normal mb-0">Now Playing: {activeLessonTitle}</h3>
+                            <button className="view-btn" style={{ fontSize: "14px" }} onClick={() => { setActiveLessonVideo(null); setActiveLessonTitle(""); }}>Close</button>
+                          </div>
+                          <div style={{ marginTop: "15px" }}>
+                            <iframe width="100%" height="300" src={activeLessonVideo} style={{ borderRadius: "10px" }} allow="autoplay; encrypted-media" title={activeLessonTitle} allowFullScreen></iframe>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
                 {/* New Modules added by user */}
                 {newModules.map((module, index) => (
                   <div
@@ -3134,24 +3147,29 @@ export default function Courses() {
                           </div>
                           <div className="d-flex gap-2">
                             <button
-                              className="btn btn-sm btn-warning"
+                              className="btn btn-sm btn-outline-secondary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 startEditReview(review);
                               }}
                               title="Edit review"
+                              aria-label="Edit review"
+                              style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, borderRadius: 8 }}
                             >
-                              Edit
+                              <i className="bi bi-pencil" style={{ fontSize: 16 }}></i>
                             </button>
+
                             <button
-                              className="btn btn-sm btn-danger"
+                              className="btn btn-sm btn-outline-danger"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 deleteReview(review.id);
                               }}
                               title="Delete review"
+                              aria-label="Delete review"
+                              style={{ width: 38, height: 38, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, borderRadius: 8 }}
                             >
-                              Delete
+                              <i className="bi bi-trash" style={{ fontSize: 16 }}></i>
                             </button>
                           </div>
                         </div>

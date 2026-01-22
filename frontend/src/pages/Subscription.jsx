@@ -4,6 +4,7 @@ import "../assets/Subscription.css";
 import AppLayout from "../components/AppLayout";
 import { useNavigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "../components/ErrorBoundary";
+import boyAvatar from "../assets/boy-showing-course.png";
 
 // Static demo courses removed — subscription page relies only on backend course data
 // (This prevents five demo courses from appearing to students.)
@@ -48,22 +49,31 @@ function CourseCard({ course, onEnroll, isFavorite, onToggleFavorite }) {
 
       <div className="course-card-content">
         {course.isPremium && <span className="premium-badge">PREMIUM</span>}
-        <span className="language-badge">{course.language}</span>
 
         <div className="course-image-container">
           <div className="course-image-wrapper">
-            <img
-              src={resolveCourseLogo(course)}
-              alt={`${course.title} logo`}
-              className="course-image"
-              loading="lazy"
-              decoding="async"
-              onError={(e) => { e.currentTarget.src = fallbackLogo; }}
-            />
+            {
+              (() => {
+                const src = (course.image && course.image !== 'default') ? course.image : resolveCourseLogo(course);
+                return (
+                  <img
+                    src={src}
+                    alt={`${course.title} logo`}
+                    className="course-image"
+                    loading="lazy"
+                    decoding="async"
+                    onError={(e) => { e.currentTarget.src = fallbackLogo; }}
+                  />
+                );
+              })()
+            }
           </div>
-        </div>
+          
+            <span className="language-badge">{course.language}</span>
 
-        <div className="course-info">
+          </div>
+
+          <div className="course-info">
           <h3 className="course-title">{course.title}</h3>
           <div className="course-price">{`₹${course.price ?? 0}`}</div>
         </div>
@@ -106,78 +116,47 @@ function CourseListing({ onCourseSelect }) {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   useEffect(() => {
-    // Fetch profile first (to determine role), then fetch courses
     (async () => {
       try {
         const token = localStorage.getItem('token');
-
-        if (token) {
-          try {
-            const profileRes = await fetch('/api/auth/profile', {
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-            });
-            if (profileRes.ok) {
-              const profileData = await profileRes.json();
-              setUserRole(profileData.role || null);
-            }
-          } catch (err) {
-            console.warn('⚠️ Failed to load user profile:', err);
+        const res = await fetch('/api/courses', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
-        }
+        });
 
-        // Now fetch courses
-        try {
-          const token = localStorage.getItem('token');
-          const res = await fetch('/api/courses', {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            }
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.courses && data.courses.length > 0) {
-              // Map backend courses to frontend format
-              const mappedCourses = data.courses.map(course => ({
-                id: course._id, // Use MongoDB _id
-                title: course.title,
-                language: course.language || 'English',
-                image: course.thumbnail || 'default',
-                students: `${course.enrolledStudents?.length || 0} students`,
-                price: course.price || 0,
-                rating: course.rating || 4.5,
-                reviews: course.reviews || 0,
-                isPremium: course.isPremium !== false,
-                tutor: course.instructor?.fullName || 'KavyaLearn',
-                // sellingStatus: course.isPublished ? 'Course Selling' : ,
-                totalStudents: `${course.enrolledStudents?.length || 0} students`,
-                overview: course.description?.substring(0, 100) || 'Learn from experts',
-                description: course.description || 'No description available',
-                additionalInfo: 'Enroll now and get started!',
-                sections: [],
-                ratings: {
-                  overall: course.rating || 4.5,
-                  breakdown: []
-                },
-                faqs: []
-              }));
-              console.log('✅ Loaded', mappedCourses.length, 'courses from backend');
-              setCourses(mappedCourses);
-            } else {
-              // No backend courses — show empty state (demo courses removed)
-              console.log('ℹ️ No backend courses available — showing empty state');
-              setCourses([]);
-            }
+        if (res.ok) {
+          const data = await res.json();
+          if (data.courses && data.courses.length > 0) {
+            const mappedCourses = data.courses.map(course => ({
+              id: course._id,
+              title: course.title,
+              language: course.language || 'English',
+              image: course.thumbnail || 'default',
+              students: `${course.enrolledStudents?.length || 0} students`,
+              price: course.price || 0,
+              rating: course.rating || 4.5,
+              reviews: course.reviews || 0,
+              isPremium: course.isPremium !== false,
+              tutor: course.instructor?.fullName || 'KavyaLearn',
+              totalStudents: `${course.enrolledStudents?.length || 0} students`,
+              overview: course.description?.substring(0, 100) || 'Learn from experts',
+              description: course.description || 'No description available',
+              additionalInfo: 'Enroll now and get started!',
+              sections: course.sections || [],
+              ratings: { overall: course.rating || 4.5, breakdown: [] },
+              faqs: course.faqs || []
+            }));
+            setCourses(mappedCourses);
+          } else {
+            setCourses([]);
           }
-        } catch (err) {
-          console.warn('⚠️ Failed to fetch backend courses:', err);
-          // Request failed — show empty state (demo courses removed)
+        } else {
           setCourses([]);
         }
       } catch (err) {
-        console.warn('⚠️ Unexpected error in CourseListing:', err);
-        // Unexpected error — show empty state (demo courses removed)
+        console.warn('⚠️ Failed to fetch backend courses:', err);
         setCourses([]);
       } finally {
         setLoading(false);
@@ -271,6 +250,44 @@ function CourseDetail({ course, onBack }) {
 
   const [showFullDesc, setShowFullDesc] = useState(false);
 
+  const defaultFaqs = [
+    {
+      question: 'How do I enroll in this course?',
+      answer:
+        'Click the "Pay Now" button and complete the payment flow. After successful payment the course will be added to your Enrolled Courses and accessible from your dashboard.'
+    },
+    {
+      question: 'What if my payment fails during checkout?',
+      answer:
+        'If a payment fails, you will receive an error message and no charge will be applied. Try again or contact support with your transaction id — we will help complete the enrollment.'
+    },
+    {
+      question: 'When will I get access to the course materials?',
+      answer:
+        'Access is typically granted immediately after successful payment. If access is delayed, refresh your Enrolled Courses page or contact support — we will verify and enable access.'
+    },
+    {
+      question: 'Do I get a certificate after completion?',
+      answer:
+        'Yes — on successful completion of the course requirements you will be issued a completion certificate which can be downloaded from the course dashboard.'
+    },
+    {
+      question: 'What if I want a refund?',
+      answer:
+        'Refunds are handled according to the course refund policy; please contact support with your order details. Short requests (within the refund window) are processed promptly.'
+    },
+    {
+      question: 'Are there prerequisites for this course?',
+      answer:
+        'Most beginner courses have no strict prerequisites. Check the course overview for recommended background; advanced courses may list required prior knowledge.'
+    },
+    {
+      question: 'How can I get help if I face issues?',
+      answer:
+        'Use the support link in the footer or contact our helpdesk with details of the issue — include screenshots and transaction ID for payment problems.'
+    }
+  ];
+
   const handlePayNow = () => {
     (async () => {
       if (!window.confirm(`Are you sure you want to purchase "${course.title}"?`)) return;
@@ -341,23 +358,35 @@ function CourseDetail({ course, onBack }) {
   return (
     <div className="course-detail">
       <div className="course-detail-container">
-        <button onClick={onBack} className="back-button">
+        <button onClick={onBack} className="back-button" 
+        style={{marginBottom:'20px'}}>
           <ArrowLeft size={20} />
           <span>Back to Courses</span>
         </button>
 
-        <div className="course-header">
-          <h1 className="course-title-large">{course.title}</h1>
+        <div className="course-hero">
+          <div className="hero-image">
+            <img src={boyAvatar} alt="student avatar" className="hero-boy" />
+          </div>
+          <div className="hero-content">
+            <h1 className="hero-title">{course.title}</h1>
+            <div className="hero-sub">• Created by: {course.tutor}</div>
+            <div className="hero-sub">• {course.totalStudents} seats left (Filling Fast)</div>
 
-          <div className="course-meta">
-            {/* <span className="status-badge">{course.sellingStatus}</span> */}
-            <span className="course-tutor" style={{ marginLeft: '10px' }}>Tutor: {course.tutor}</span>
-            <div className="rating-display">
-              <Star size={16} className="rating-icon" />
-              <span className="rating-value">{course.rating}</span>
-              <span className="rating-text">({course.reviews} reviews)</span>
+            <div className="hero-features">
+              <div className="feature">
+                <div className="feature-icon">✔</div>
+                <div className="feature-text">Lifetime Access to Course Material</div>
+              </div>
+              <div className="feature">
+                <div className="feature-icon">✔</div>
+                <div className="feature-text">Learn from industry-relevant content</div>
+              </div>
+              <div className="feature">
+                <div className="feature-icon">✔</div>
+                <div className="feature-text">Certificate of Completion</div>
+              </div>
             </div>
-            <span className="course-students">{course.totalStudents}</span>
           </div>
         </div>
 
@@ -408,11 +437,34 @@ function CourseDetail({ course, onBack }) {
             ))}
           </div>
 
-          <div className="pay-button-container">
-            <button className="pay-button" onClick={handlePayNow}>
-              PAY NOW
-            </button>
+          <div className="faqs-section">
+            <h2 className="section-title mt-3">Frequently Asked Questions</h2>
+            <div className="faqs-list">
+              {(course.faqs && course.faqs.length ? course.faqs : defaultFaqs).map((f, i) => {
+                const open = !!expandedFaqs[i];
+                return (
+                  <div key={i} className={`faq-item ${open ? 'faq-item-expanded' : ''}`} onClick={() => toggleFaq(i)}>
+                    <div className={`faq-header`}>
+                      <div className={`faq-icon ${open ? 'faq-icon-expanded' : ''}`}>
+                        <ChevronRight size={18} />
+                      </div>
+                      <div className="faq-question">{f.question}</div>
+                    </div>
+                    {open && <div className="faq-answer">{f.answer}</div>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
+            <div className="price-row">
+              <div className="discount-input">
+                <input placeholder="Have a discount code?" />
+                <button className="discount-apply">➜</button>
+              </div>
+              <div className="price-pill">{`₹ ${course.price ?? 0}`}</div>
+              <button className="pay-now-primary" onClick={handlePayNow}>Pay Now</button>
+            </div>
         </div>
 
         

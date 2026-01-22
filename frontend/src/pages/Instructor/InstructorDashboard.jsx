@@ -135,42 +135,7 @@ const InstructorDashboard = () => {
           </div>
         </div>
 
-        {/* Recent Courses */}
-        <div className="recent-courses">
-          <h2>Your Courses</h2>
-          {courses.length === 0 ? (
-            <p>No courses created yet. <Link to="/instructor/courses">Create a course</Link></p>
-          ) : (
-            <div className="courses-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Course Title</th>
-                    <th>Category</th>
-                    <th>Level</th>
-                    <th>Students</th>
-                    <th>Lessons</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {courses.map(course => (
-                    <tr key={course._id}>
-                      <td><strong>{course.title}</strong></td>
-                      <td>{course.category}</td>
-                      <td>{course.level}</td>
-                      <td>{course.enrolledStudents?.length || 0}</td>
-                      <td>{course.lessons?.length || 0}</td>
-                      <td>
-                        <Link to={`/instructor/courses/${course._id}`} className="btn-sm">Edit</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        
       </div>
     </AppLayout>
   );

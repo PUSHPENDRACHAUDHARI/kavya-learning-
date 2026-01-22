@@ -16,6 +16,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
   });
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleChange = (e) => {
@@ -52,6 +53,16 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
     setFormData(prev => ({ ...prev, resourceName: file.name }));
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file for the thumbnail.');
+      return;
+    }
+    setSelectedImage(file);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -67,6 +78,24 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
       const created = createRes.data;
       // created may be the course object or { data: course }
       const course = created && created._id ? created : (created.data || created);
+
+      // If an image was selected, upload it to the server and attach as thumbnail
+      if (selectedImage && course && course._id) {
+        try {
+          const imgPayload = new FormData();
+          imgPayload.append('file', selectedImage);
+          const uploadRes = await axiosClient.post('/api/uploads', imgPayload, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          const imageUrl = uploadRes?.data?.url || uploadRes?.data?.secure_url || uploadRes?.data?.data?.url;
+          if (imageUrl) {
+            // update admin course thumbnail
+            await axiosClient.put(`/api/admin/courses/${course._id}`, { thumbnail: imageUrl });
+          }
+        } catch (err) {
+          console.warn('Image upload failed', err?.response?.data || err.message || err);
+        }
+      }
 
       // If a PDF was selected, upload it to the server and attach to the course
       if (selectedFile && course && course._id) {
@@ -104,6 +133,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
         resourceUrl: '',
         resourceName: ''
       });
+      setSelectedImage(null);
       onSuccess();
       onClose();
     } catch (err) {
@@ -132,7 +162,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
         <select id="level" name="level" value={formData.level} onChange={handleChange} className="form-control">
           <option value="Beginner">Beginner</option>
           <option value="Intermediate">Intermediate</option>
-          <option value="Advanced">Advanced</option>
+          <option value="Advanced">Advance</option>
         </select>
       </div>
       <div>
@@ -162,6 +192,12 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
             Uploaded: <a href={formData.resourceUrl} target="_blank" rel="noopener noreferrer">{formData.resourceName || 'View file'}</a>
           </div>
         )}
+      </div>
+
+      <div style={{ gridColumn: '1 / -1' }}>
+        <label style={{ display: 'block', marginBottom: 6 }}>Upload Thumbnail image (optional)</label>
+        <input type="file" accept="image/*" onChange={handleImageChange} className="form-control" />
+        {selectedImage && <div style={{ marginTop: 8 }}>Selected image: {selectedImage.name}</div>}
       </div>
 
       <button type="submit" className="btn btn-primary" style={{ gridColumn: '1 / -1' }}>Create Course</button>

@@ -522,6 +522,13 @@
   transition: width 0.3s ease;
 }
 
+.challenge-dates {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: -0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .motivation-card {
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
   text-align: center;

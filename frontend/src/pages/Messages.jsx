@@ -478,7 +478,28 @@ export default function Messages() {
                   return fullName.includes(searchLower) || email.includes(searchLower);
                 })
                 .map((s) => (
-                <div key={s._id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, width: '100%' }}>
+                <div key={s._id} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, width: '100%' }}>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePinStudent(s._id); }}
+                    style={{
+                      padding: 8,
+                      background: 'transparent',
+                      color: pinnedStudents.includes(String(s._id)) ? 'var(--primary)' : '#ccc',
+                      border: '1px solid currentColor',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 40,
+                      height: 40
+                    }}
+                    title={pinnedStudents.includes(String(s._id)) ? 'Unpin' : 'Pin'}
+                  >
+                    {pinnedStudents.includes(String(s._id)) ? '📌' : '📍'}
+                  </button>
+
                   <button
                     onClick={() => loadConversation(s)}
                     style={{
@@ -511,30 +532,6 @@ export default function Messages() {
                         )}
                       </div>
                     </div>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      togglePinStudent(s._id);
-                    }}
-                    style={{
-                      padding: '6px 8px',
-                      background: 'transparent',
-                      color: pinnedStudents.includes(String(s._id)) ? 'var(--primary)' : '#ccc',
-                      border: '1px solid currentColor',
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: 36,
-                      height: 36
-                    }}
-                    title={pinnedStudents.includes(String(s._id)) ? 'Unpin' : 'Pin'}
-                  >
-                    {pinnedStudents.includes(String(s._id)) ? '📌' : '📍'}
                   </button>
                 </div>
               ))}

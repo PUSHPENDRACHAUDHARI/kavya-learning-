@@ -68,6 +68,7 @@ const userSchema = new mongoose.Schema(
     },
     phone: { type: String },
     gender: { type: String, enum: ['male', 'female', 'other'], default: null },
+    age: { type: Number },
     bio: { type: String },
     location: { type: String },
     address: {
@@ -82,6 +83,9 @@ const userSchema = new mongoose.Schema(
     // 'Active' means normal; 'Blocked' means administrator has blocked the user
     user_status: { type: String, enum: ['Active', 'Blocked'], default: 'Active' },
     avatar: { type: String },
+    // Password reset token and expiry used by forgot/reset flow
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
     // Achievement streak system
     lastLoginDate: { type: Date },
     streakDays: { type: Number, default: 0 },

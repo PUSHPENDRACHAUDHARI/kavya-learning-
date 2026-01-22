@@ -88,12 +88,30 @@ export default function Leaderboard() {
       }
       setLoading(false);
     }
-    
-    async function loadStudentProgress() {
+
+    async function loadWeeklyChallengeConfig() {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/challenges/weekly', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : undefined,
+          },
+        });
+
+        if (!res.ok) return null;
+        const payload = await res.json();
+        return payload || null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    async function loadStudentProgress(challengeConfig) {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        
+
         const res = await fetch('/api/student/dashboard', {
           headers: {
             'Content-Type': 'application/json',
@@ -101,35 +119,37 @@ export default function Leaderboard() {
           },
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          const student = data.data || data;
-          
-          // Calculate courses completed this week
-          const oneWeekAgo = new Date();
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-          
-          const coursesCompleted = (student.enrolledCourses || []).filter(
-            ec => ec.completed && new Date(ec.completionDate) >= oneWeekAgo
-          ).length;
-          
-          // Calculate hours studied (use totalHoursLearned or estimate from progress)
-          const hoursStudied = Math.floor((student.totalHoursLearned || 0) % 10);
-          
-          setWeeklyChallenges({
-            coursesCompleted,
-            coursesTarget: 5,
-            hoursStudied,
-            hoursTarget: 10
-          });
-        }
+        if (!res.ok) return;
+        const data = await res.json();
+        const student = data.data || data;
+
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        const coursesCompleted = (student.enrolledCourses || []).filter(
+          (ec) => ec.completed && new Date(ec.completionDate) >= oneWeekAgo
+        ).length;
+
+        const hoursStudied = Math.round((student.totalHoursLearned || 0));
+
+        setWeeklyChallenges({
+          coursesCompleted,
+          coursesTarget: (challengeConfig && challengeConfig.coursesTarget) || 5,
+          hoursStudied,
+          hoursTarget: (challengeConfig && challengeConfig.hoursTarget) || 10,
+          startDate: challengeConfig?.startDate,
+          endDate: challengeConfig?.endDate,
+        });
       } catch (err) {
         console.error('Error loading student progress', err);
       }
     }
-    
-    loadLeaderboard();
-    loadStudentProgress();
+
+    (async () => {
+      const cfg = await loadWeeklyChallengeConfig();
+      await loadStudentProgress(cfg);
+      await loadLeaderboard();
+    })();
   }, []);
 
   const renderLeaderboardContent = () => {
@@ -365,7 +385,7 @@ export default function Leaderboard() {
               onMouseEnter={() => setAchievementsHover(true)}
               onMouseLeave={() => setAchievementsHover(false)}
             >
-              <h3 className="section-title">Your Achievements</h3>
+              <h3 className="section-title mb-5">Your Achievements</h3>
 
               <div className="achievements-list">
                 {achievements.map((achievement, index) => (
@@ -392,6 +412,11 @@ export default function Leaderboard() {
               onMouseLeave={() => setChallengeHover(false)}
             >
               <h3 className="section-title">Weekly Challenge</h3>
+              {weeklyChallenges?.startDate && weeklyChallenges?.endDate && (
+                <div className="challenge-dates">
+                  {new Date(weeklyChallenges.startDate).toLocaleDateString()} - {new Date(weeklyChallenges.endDate).toLocaleDateString()}
+                </div>
+              )}
 
               <div className="challenge-item">
                 <div className="challenge-label-row">

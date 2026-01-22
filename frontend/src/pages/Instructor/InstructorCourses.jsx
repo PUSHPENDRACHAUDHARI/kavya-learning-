@@ -21,6 +21,7 @@ const InstructorCourses = () => {
     thumbnail: ''
   });
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
@@ -68,11 +69,11 @@ const InstructorCourses = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Validate price to prevent negative values
+    // Validate price to only accept positive values (1 and above)
     if (name === 'price') {
       const numValue = parseFloat(value);
-      if (value !== '' && numValue < 0) {
-        alert('Price must be greater than or equal to 0');
+      if (value !== '' && numValue <= 0) {
+        alert('Price must be greater than 0');
         return;
       }
     }
@@ -97,6 +98,23 @@ const InstructorCourses = () => {
         courseRes = await axiosClient.post('/api/instructor/courses', durationData);
       }
       const created = courseRes.data && (courseRes.data.data || courseRes.data);
+      // If an image was selected, upload it to server and attach as thumbnail
+      if (selectedImage && created && created._id) {
+        try {
+          const imgPayload = new FormData();
+          imgPayload.append('file', selectedImage);
+          const uploadRes = await axiosClient.post('/api/uploads', imgPayload, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          const imageUrl = uploadRes?.data?.url || uploadRes?.data?.secure_url || uploadRes?.data?.data?.url;
+          if (imageUrl) {
+            // update course thumbnail
+            await axiosClient.put(`/api/instructor/courses/${created._id}`, { thumbnail: imageUrl });
+          }
+        } catch (err) {
+          console.warn('Image upload failed', err?.response?.data || err.message || err);
+        }
+      }
       // If a PDF was selected, upload it for this course
       if (selectedFile && created && created._id) {
         try {
@@ -131,6 +149,7 @@ const InstructorCourses = () => {
         thumbnail: ''
       });
       setSelectedFile(null);
+      setSelectedImage(null);
       setEditingCourse(null);
       setShowForm(false);
       loadCourses();
@@ -147,6 +166,16 @@ const InstructorCourses = () => {
       return;
     }
     setSelectedFile(file);
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file for the thumbnail.');
+      return;
+    }
+    setSelectedImage(file);
   };
 
   const handleEdit = (course) => {
@@ -233,7 +262,7 @@ const InstructorCourses = () => {
             <option value="all">All levels</option>
             <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
+            <option value="Advance">Advance</option>
           </select>
         </div>
 
@@ -260,7 +289,7 @@ const InstructorCourses = () => {
               <select name="level" value={formData.level} onChange={handleChange} className="form-control">
                 <option value="Beginner">Beginner</option>
                 <option value="Intermediate">Intermediate</option>
-                <option value="Advanced">Advanced</option>
+                <option value="Advance">Advance</option>
               </select>
               <textarea 
                 name="description" 
@@ -286,7 +315,7 @@ const InstructorCourses = () => {
                 placeholder="Price" 
                 value={formData.price} 
                 onChange={handleChange} 
-                min="0" 
+                min="1" 
                 step="0.01"
                 className="form-control" 
               />
@@ -308,6 +337,11 @@ const InstructorCourses = () => {
                 onChange={handleChange} 
                 className="form-control" 
               />
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: 'block', marginBottom: 6 }}>Or upload thumbnail image</label>
+                <input type="file" accept="image/*" onChange={handleImageChange} className="form-control" />
+                {selectedImage && <div style={{ marginTop: 8 }}>Selected image: {selectedImage.name}</div>}
+              </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', marginBottom: 6 }}>Upload PDF resource (optional)</label>
                 <input type="file" accept="application/pdf" onChange={handleFileChange} className="form-control" />
