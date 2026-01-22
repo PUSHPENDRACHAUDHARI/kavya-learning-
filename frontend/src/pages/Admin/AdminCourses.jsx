@@ -131,7 +131,7 @@ const AdminCourses = () => {
           <option value="all">All levels</option>
           <option value="beginner">Beginner</option>
           <option value="intermediate">Intermediate</option>
-          <option value="advance">Advance</option>
+          <option value="advanced">Advanced</option>
         </select>
       </div>
 

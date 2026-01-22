@@ -98,7 +98,7 @@ function Sidebar({ isOpen, setIsOpen }) {
     // Show Dashboard and Courses only for student users (not instructor, admin, or parent)
       ...(userRole !== 'instructor' && userRole !== 'admin' && userRole !== 'sub-admin' && userRole !== 'parent' ? [
       { path: "/dashboard", label: "Dashboard", icon: <FiHome /> },
-      { path: "/courses", label: "Courses", icon: <AiOutlineBook /> },
+      // { path: "/courses", label: "Courses", icon: <AiOutlineBook /> },
       // Enrolled Courses (visible only to students) - placed directly below Courses
       { path: "/student/enrolled-courses", label: "Enrolled Courses", icon: <MdAutoStories /> },
       { path: "/student/notes", label: "Notes", icon: <LuGalleryHorizontalEnd /> },

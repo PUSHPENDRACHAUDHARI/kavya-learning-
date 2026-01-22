@@ -8,6 +8,7 @@ import "../../assets/admin-dark-mode.css";
 
 const AdminStudents = () => {
   const [students, setStudents] = useState([]);
+  const [courseCache, setCourseCache] = useState({}); // { courseId: { title, instructorName } }
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showFreeModal, setShowFreeModal] = useState(false);
@@ -31,6 +32,29 @@ const AdminStudents = () => {
 
       // Expect backend to send enrolledCourses & achievements
       setStudents(res.data.data || res.data);
+      // after setting students, kick off course prefetch for enrolled course ids
+      try {
+        const payload = res.data.data || res.data || [];
+        const courseIds = new Set();
+        (payload || []).forEach(s => {
+          (s.enrolledCourses || []).forEach(ec => {
+            const cid = ec.course?._id || ec.courseId?._id || ec.courseId || ec.course || null;
+            if (cid && typeof cid === 'string' && !courseCache[cid]) courseIds.add(cid);
+            if (cid && typeof cid === 'object' && cid._id && !courseCache[cid._id]) courseIds.add(String(cid._id));
+          });
+        });
+        if (courseIds.size > 0) {
+          for (const id of courseIds) {
+            // fetch each course if not cached
+            if (!courseCache[id]) {
+              axiosClient.get(`/api/courses/${id}`).then(r => {
+                const c = r.data && r.data.data ? r.data.data : r.data;
+                setCourseCache(prev => ({ ...prev, [id]: { title: c?.title || c?.name || 'Untitled', instructorName: (c?.instructor && (c.instructor.fullName || c.instructor)) || 'N/A' } }));
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e) {}
     } catch (err) {
       console.error("Failed loading students", err);
     } finally {
@@ -247,21 +271,42 @@ const AdminStudents = () => {
               {/* ENROLLED COURSES */}
               <td>
                 {s.enrolledCourses?.length > 0 ? (
-                  s.enrolledCourses.map((e) => (
-                    <div
-                      key={e._id}
-                      style={{
-                        padding: "6px",
-                        borderBottom: "1px solid #ddd",
-                        marginBottom: 5,
-                      }}
-                    >
-                      <strong>{e.courseId?.title}</strong> <br />
-                      Instructor: {e.instructorId?.fullName || "N/A"} <br />
-                      Progress: {e.progressPercentage}% <br />
-                      Completed: {e.completed ? "Yes" : "No"}
-                    </div>
-                  ))
+                  s.enrolledCourses.map((e, idx) => {
+                    // Enrollment object shapes may vary: support several possible shapes
+                    const courseObj = e.course || e.courseId || e.courseId?.course || null;
+                    let courseTitle = (courseObj && (courseObj.title || courseObj.name)) || e.courseTitle || e.title || 'Untitled Course';
+                    let instructorName = (courseObj && (courseObj.instructor?.fullName || courseObj.instructor)) || e.instructorId?.fullName || e.instructorName || 'N/A';
+
+                    // If we don't have a populated course title, try the cache (prefetched)
+                    const possibleId = (e.course && (typeof e.course === 'string' ? e.course : (e.course._id || null))) || (e.courseId && (typeof e.courseId === 'string' ? e.courseId : (e.courseId._id || null)));
+                    const cid = possibleId ? String(possibleId) : null;
+                    if (cid && courseCache[cid]) {
+                      courseTitle = courseCache[cid].title || courseTitle;
+                      instructorName = courseCache[cid].instructorName || instructorName;
+                    }
+
+                    // Progress may be stored at different keys
+                    const progress = (typeof e.progressPercentage === 'number') ? e.progressPercentage : (typeof e.completionPercentage === 'number' ? e.completionPercentage : (e.progress || 0));
+
+                    // Completed flag: prefer boolean, fallback to progress === 100
+                    const completedFlag = (typeof e.completed === 'boolean') ? e.completed : (Math.round(Number(progress) || 0) === 100);
+
+                    return (
+                      <div
+                        key={e._id || idx}
+                        style={{
+                          padding: "6px",
+                          borderBottom: "1px solid #ddd",
+                          marginBottom: 5,
+                        }}
+                      >
+                        <strong>{courseTitle}</strong> <br />
+                        Instructor: {instructorName} <br />
+                        Progress: {Number(progress || 0)}% <br />
+                        Completed: {completedFlag ? "Yes" : "No"}
+                      </div>
+                    );
+                  })
                 ) : (
                   <span className="text-muted">No courses purchased</span>
                 )}
@@ -287,19 +332,22 @@ const AdminStudents = () => {
 
               {/* PERFORMANCE SECTION */}
               <td>
-                Total Courses: {s.enrolledCourses?.length || 0} <br />
-                Completed Courses: {s.enrolledCourses?.filter((c) => c.completed).length || 0} {" "}
-                <br />
-                Avg Progress: {s.enrolledCourses?.length
-                  ? (
-                      s.enrolledCourses.reduce(
-                        (acc, c) => acc + c.progressPercentage,
-                        0
-                      ) / s.enrolledCourses.length
-                    ).toFixed(1)
-                  : "0"}
-                % <br />
-                Last Active: {s.lastActive || "N/A"}
+                  {(() => {
+                    const enrolls = s.enrolledCourses || [];
+                    const totalCourses = enrolls.length;
+                    const completedCourses = enrolls.reduce((acc, c) => {
+                      const prog = Number(c.progressPercentage ?? c.completionPercentage ?? c.progress ?? 0) || 0;
+                      return acc + (prog === 100 ? 1 : 0);
+                    }, 0);
+                    const avgProgress = totalCourses > 0 ? Math.round((completedCourses / totalCourses) * 100) : 0;
+                    return (
+                      <>
+                        Total Courses: {totalCourses} <br />
+                        Completed Courses: {completedCourses} <br />
+                        Avg Progress: {avgProgress}%
+                      </>
+                    );
+                  })()}
               </td>
 
               {/* ACHIEVEMENTS */}
