@@ -4,6 +4,18 @@ const Enrollment = require('../models/enrollmentModel');
 const Announcement = require('../models/announcementModel');
 const ActivityLog = require('../models/activityLogModel');
 
+// Helper to parse duration-like strings (e.g. "3 weeks", "45 hrs") into a numeric value.
+const parseDurationValue = (v) => {
+  if (v === undefined || v === null) return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (s === '') return 0;
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return 0;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) ? n : 0;
+};
+
 // --- Users (Admin) ---
 exports.createUser = async (req, res) => {
   try {
@@ -168,7 +180,10 @@ exports.createCourse = async (req, res) => {
       payload.price = 0;
     }
     if (!payload.duration) {
-      payload.duration = '0 weeks';
+      payload.duration = 0;
+    } else {
+      // coerce duration to numeric
+      payload.duration = parseDurationValue(payload.duration);
     }
     
     const course = await Course.create(payload);

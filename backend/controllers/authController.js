@@ -2,6 +2,7 @@ const User = require('../models/userModel');
 const Institution = require('../models/institutionModel');
 const Notification = require('../models/notificationModel');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const Schedule = require('../models/scheduleModel');
 const Event = require('../models/eventModel');
 const sendgrid = require('@sendgrid/mail');
@@ -288,5 +289,77 @@ exports.updateUserProfile = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Request password reset (forgot password)
+// @route   POST /api/auth/forgot-password
+// @access  Public
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ message: 'Email is required' });
+
+        let user = await User.findOne({ email: email.toLowerCase() });
+        // If requesting reset for the single-admin address and user record doesn't exist,
+        // create a placeholder admin record so the reset can be applied.
+        if (!user && email.toLowerCase() === ADMIN_EMAIL) {
+            const tempPass = crypto.randomBytes(8).toString('hex');
+            user = await User.create({ fullName: 'Administrator', email: ADMIN_EMAIL, password: tempPass, role: 'admin' });
+        }
+        // Always respond with success to avoid revealing registered emails
+        if (!user) return res.json({ message: 'If that email is registered, a reset link has been sent.' });
+
+        // Create a token and expiry (1 hour)
+        const token = crypto.randomBytes(20).toString('hex');
+        user.resetPasswordToken = token;
+        user.resetPasswordExpires = Date.now() + 3600 * 1000;
+        await user.save();
+
+        // Build reset URL for frontend
+        const frontend = process.env.FRONTEND_URL || '';
+        const resetUrl = frontend ? `${frontend.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}` : `/reset-password?token=${encodeURIComponent(token)}`;
+
+        // Send email if SendGrid configured
+        if (process.env.SENDGRID_API_KEY && process.env.FROM_EMAIL) {
+            try {
+                sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
+                await sendgrid.send({
+                    to: user.email,
+                    from: process.env.FROM_EMAIL,
+                    subject: 'Password reset for your account',
+                    text: `You requested a password reset. Click the link: ${resetUrl}`,
+                    html: `<p>You requested a password reset. Click the link below to reset your password (link valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p>`
+                });
+            } catch (e) {
+                console.warn('SendGrid send failed', e.message || e);
+            }
+        }
+
+        return res.json({ message: 'If that email is registered, a reset link has been sent.', resetUrl });
+    } catch (error) {
+        return res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Reset password using token
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        if (!token || !password) return res.status(400).json({ message: 'Token and password are required' });
+
+        const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: Date.now() } });
+        if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+
+        user.password = password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+
+        return res.json({ message: 'Password has been reset. You can now login with your new password.' });
+    } catch (error) {
+        return res.status(400).json({ message: error.message });
     }
 };

@@ -3,6 +3,19 @@ const Lesson = require('../models/lessonModel');
 const User = require('../models/userModel');
 const Achievement = require('../models/achievementModel');
 
+// Parse duration-like inputs into a numeric value. Accepts numbers or strings like "3 weeks" or "45 hrs".
+// Returns first numeric token found as a Number, or 0 when not parseable.
+const parseDurationValue = (v) => {
+  if (v === undefined || v === null) return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim();
+  if (s === '') return 0;
+  const m = s.match(/(\d+(?:\.\d+)?)/);
+  if (!m) return 0;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) ? n : 0;
+};
+
 // ==================== COURSES ====================
 
 // @desc    Get all courses for instructor
@@ -58,7 +71,8 @@ exports.getInstructorCourse = async (req, res) => {
 // @access  Private/Instructor
 exports.createCourse = async (req, res) => {
   try {
-    const { title, description, category, level, price, duration, thumbnail } = req.body;
+    const { title, description, category, level, price, duration: rawDuration, thumbnail } = req.body;
+    const duration = parseDurationValue(rawDuration);
 
     const course = await Course.create({
       title,

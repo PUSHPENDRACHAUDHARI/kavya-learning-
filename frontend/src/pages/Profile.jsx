@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Edit3,
   Users,
+  Shield,
 } from "lucide-react";
 import {
   LineChart,
@@ -513,10 +514,17 @@ export default function Profile() {
 
             <div className="profile-main">
               <div className="profile-main-row">
-                <h2 className="profile-name">{profile.name}</h2>
+                <div className="profile-name-row">
+                  <h2 className="profile-name">{profile.name}</h2>
+                  {(userRole === 'admin' || userRole === 'sub-admin') && (
+                    <span className="admin-badge">
+                      <Shield size={14} /> Administrator
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <p className="profile-bio">{profile.bio}</p>
+              <p className="profile-bio">{profile.bio || 'write about yourself'}</p>
               <div className="profile-contacts">
                 <div className="left">
                   <div className="contact-item">

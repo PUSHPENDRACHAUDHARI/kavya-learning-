@@ -310,7 +310,27 @@ function LoginPage() {
             <h3 style={{marginTop:0}}>Admin Login</h3>
             {adminError && <div style={{background:'#fee2e2', color:'#b91c1c', padding:8, borderRadius:6, marginBottom:8}}>{adminError}</div>}
             <input className="input-field" placeholder="Admin Email" value={adminEmail} onChange={(e)=>setAdminEmail(e.target.value)} style={{marginBottom:8}} />
-            <input className="input-field" placeholder="Password" type="password" value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value)} style={{marginBottom:12}} />
+            <input className="input-field" placeholder="Password" type="password" value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value)} style={{marginBottom:8}} />
+
+            <div style={{marginBottom:12, display: 'flex', justifyContent: 'flex-end'}}>
+              <a
+                href="#"
+                style={{ color: '#2563eb', textDecoration: 'underline' }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Open the shared request-reset modal prefilled with admin email
+                  setShowAdminLogin(false);
+                  setRequestEmail(adminEmail || 'pravinkumar@gmail.com');
+                  setRequestError('');
+                  setRequestSuccess('');
+                  setRequestResetUrl('');
+                  setShowRequestReset(true);
+                }}
+              >
+                Forgot password?
+              </a>
+            </div>
+
             <div style={{display:'flex', gap:8}}>
               <button className="login-btn" onClick={async ()=>{
                 setAdminError(''); setAdminLoading(true);
@@ -336,7 +356,7 @@ function LoginPage() {
                 } catch (e) { setAdminError('Connection error'); }
                 setAdminLoading(false);
               }} disabled={adminLoading || !adminEmail || !adminPassword}>{adminLoading ? 'Signing in...' : 'Sign in as Admin'}</button>
-              <button className="login-btn" style={{background:'#ddd', color:'#111'}} onClick={()=>setShowAdminLogin(false)}>Cancel</button>
+              <button className="login-btn" style={{background:'#ddd', color:'#111'}} onClick={()=>setShowAdminLogin(false)}>Close</button>
             </div>
           </div>
         </div>
