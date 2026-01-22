@@ -21,6 +21,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminStudents from './pages/Admin/AdminStudents';
 import AdminParents from './pages/Admin/AdminParents';
+import AdminInstructors from './pages/Admin/AdminInstructors';
 import AdminCourses from './pages/Admin/AdminCourses';
 import AdminEnrollments from './pages/Admin/AdminEnrollments';
 import AdminNotes from './pages/Admin/AdminNotes';
@@ -101,6 +102,7 @@ function Layout() {
           <Route path="/admin/dashboard" element={<ProtectedRoute requireAdmin={true}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/students" element={<ProtectedRoute requireAdmin={true}><AdminStudents /></ProtectedRoute>} />
           <Route path="/admin/parents" element={<ProtectedRoute requireAdmin={true}><AdminParents /></ProtectedRoute>} />
+          <Route path="/admin/instructors" element={<ProtectedRoute requireAdmin={true}><AdminInstructors /></ProtectedRoute>} />
           <Route path="/admin/courses" element={<ProtectedRoute requireAdmin={true}><AdminCourses /></ProtectedRoute>} />
           <Route path="/admin/enrollments" element={<ProtectedRoute requireAdmin={true}><AdminEnrollments /></ProtectedRoute>} />
           <Route path="/admin/notes" element={<ProtectedRoute requireAdmin={true}><AdminNotes /></ProtectedRoute>} />

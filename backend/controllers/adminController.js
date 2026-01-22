@@ -588,3 +588,115 @@ exports.dashboardSummary = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// --- Instructors (Admin) ---
+
+// @desc    Create a new instructor account
+// @route   POST /api/admin/instructors
+// @access  Private/Admin
+exports.createInstructor = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    }
+
+    // Check if instructor with email already exists
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(400).json({ success: false, message: 'Instructor with this email already exists' });
+    }
+
+    // Create new instructor user
+    const instructor = await User.create({
+      email,
+      password,
+      role: 'instructor',
+      fullName: email.split('@')[0],
+      status: 'active'
+    });
+
+    // Log the action
+    await ActivityLog.create({
+      action: 'create_instructor',
+      performedBy: req.user._id,
+      targetType: 'User',
+      targetId: instructor._id,
+      details: { email }
+    });
+
+    // Return created instructor without password
+    const instructorData = instructor.toObject();
+    delete instructorData.password;
+
+    res.status(201).json({
+      success: true,
+      message: 'Instructor created successfully',
+      data: instructorData
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    List all instructors
+// @route   GET /api/admin/instructors
+// @access  Private/Admin
+exports.listInstructors = async (req, res) => {
+  try {
+    const { search, page = 1, limit = 20, status } = req.query;
+    const filter = { role: 'instructor' };
+    
+    if (status) filter.status = status;
+    if (search) filter.$or = [{ fullName: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
+
+    const instructors = await User.find(filter)
+      .select('-password')
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .sort({ createdAt: -1 });
+    
+    const total = await User.countDocuments(filter);
+    
+    res.json({
+      success: true,
+      data: instructors,
+      total,
+      page: Number(page),
+      limit: Number(limit)
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Delete an instructor
+// @route   DELETE /api/admin/instructors/:id
+// @access  Private/Admin
+exports.deleteInstructor = async (req, res) => {
+  try {
+    const instructor = await User.findByIdAndDelete(req.params.id);
+    
+    if (!instructor) {
+      return res.status(404).json({ success: false, message: 'Instructor not found' });
+    }
+
+    // Log the action
+    await ActivityLog.create({
+      action: 'delete_instructor',
+      performedBy: req.user._id,
+      targetType: 'User',
+      targetId: req.params.id,
+      details: { email: instructor.email }
+    });
+
+    res.json({
+      success: true,
+      message: 'Instructor deleted successfully'
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};

@@ -47,6 +47,11 @@ router.post('/notes', protect, authorize('admin','sub-admin'), requirePermission
 router.get('/notes', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), noteController.listNotesAdmin);
 router.delete('/notes/:id', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), noteController.deleteNote);
 
+// Instructors (admin or sub-admin with manageStudents permission)
+router.post('/instructors', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.createInstructor);
+router.get('/instructors', protect, authorize('admin','sub-admin'), requirePermission('manageStudents'), admin.listInstructors);
+router.delete('/instructors/:id', protect, authorize('admin'), admin.deleteInstructor);
+
 // Sub-admins
 router.post('/subadmins', protect, authorize('admin'), admin.createSubAdmin);
 router.get('/subadmins', protect, authorize('admin','sub-admin'), admin.listSubAdmins);
