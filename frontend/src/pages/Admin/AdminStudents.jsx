@@ -234,11 +234,7 @@ const AdminStudents = () => {
               {/* PARENT DETAILS */}
               <td>
                 {s.parent ? (
-                  <>
-                    Name: {s.parent.fullName} <br />
-                    Phone: {s.parent.phone} <br />
-                    Email: {s.parent.email} <br />
-                  </>
+                  <strong>{s.parent.fullName}</strong>
                 ) : (
                   "No Parent Assigned"
                 )}
@@ -318,14 +314,7 @@ const AdminStudents = () => {
               </td>
 
               {/* BLOCK / UNBLOCK ACTION */}
-              <td>
-                {/* Show current block status */}
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Account:</strong>{' '}
-                  <span className={`badge bg-${s.user_status === 'Blocked' ? 'danger' : 'success'}`}>
-                    {s.user_status || 'Active'}
-                  </span>
-                </div>
+              <td style={{ textAlign: 'center' }}>
                 {/* Block / Unblock button */}
                 {s.user_status === 'Blocked' ? (
                   <button
