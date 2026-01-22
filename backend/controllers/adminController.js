@@ -70,7 +70,13 @@ exports.listUsers = async (req, res) => {
       }
     }
 
-    const users = await User.find(filter).select('-password').skip((page-1)*limit).limit(Number(limit)).sort(sortObj);
+    // Populate children for parent role
+    let query = User.find(filter).select('-password').skip((page-1)*limit).limit(Number(limit)).sort(sortObj);
+    if (role === 'parent') {
+      query = query.populate('children', 'fullName email');
+    }
+    
+    const users = await query.exec();
     const total = await User.countDocuments(filter);
     res.json({ data: users, total });
   } catch (err) {
