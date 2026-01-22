@@ -68,11 +68,11 @@ const InstructorCourses = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Validate price to prevent negative values
+    // Validate price to only accept positive values (1 and above)
     if (name === 'price') {
       const numValue = parseFloat(value);
-      if (value !== '' && numValue < 0) {
-        alert('Price must be greater than or equal to 0');
+      if (value !== '' && numValue <= 0) {
+        alert('Price must be greater than 0');
         return;
       }
     }
@@ -233,7 +233,7 @@ const InstructorCourses = () => {
             <option value="all">All levels</option>
             <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
+            <option value="Advance">Advance</option>
           </select>
         </div>
 
@@ -260,7 +260,7 @@ const InstructorCourses = () => {
               <select name="level" value={formData.level} onChange={handleChange} className="form-control">
                 <option value="Beginner">Beginner</option>
                 <option value="Intermediate">Intermediate</option>
-                <option value="Advanced">Advanced</option>
+                <option value="Advance">Advance</option>
               </select>
               <textarea 
                 name="description" 
@@ -286,7 +286,7 @@ const InstructorCourses = () => {
                 placeholder="Price" 
                 value={formData.price} 
                 onChange={handleChange} 
-                min="0" 
+                min="1" 
                 step="0.01"
                 className="form-control" 
               />

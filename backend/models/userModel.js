@@ -68,6 +68,7 @@ const userSchema = new mongoose.Schema(
     },
     phone: { type: String },
     gender: { type: String, enum: ['male', 'female', 'other'], default: null },
+    age: { type: Number },
     bio: { type: String },
     location: { type: String },
     address: {

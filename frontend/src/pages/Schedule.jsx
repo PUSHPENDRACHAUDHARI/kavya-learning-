@@ -21,7 +21,7 @@ const getStudentsText = (evt) => {
   }
 };
 
-function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
+function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEdit }) {
   const [form, setForm] = useState({
     title: "",
     instructor: "",
@@ -40,7 +40,21 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
   const [formError, setFormError] = useState(null);
 
   useEffect(() => {
-    if (presetDate) {
+    // If editing, populate form with event data
+    if (eventToEdit && isOpen) {
+      setForm({
+        title: eventToEdit.title || "",
+        instructor: eventToEdit.instructor || "",
+        type: eventToEdit.type || "Live Class",
+        date: eventToEdit.date || "",
+        startTime: eventToEdit.startTime ? eventToEdit.startTime.split(' ')[0] : "",
+        startPeriod: eventToEdit.startTime ? eventToEdit.startTime.split(' ')[1] || "AM" : "AM",
+        endTime: eventToEdit.endTime ? eventToEdit.endTime.split(' ')[0] : "",
+        endPeriod: eventToEdit.endTime ? eventToEdit.endTime.split(' ')[1] || "AM" : "AM",
+        location: eventToEdit.location || "",
+        maxStudents: eventToEdit.maxStudents || 30,
+      });
+    } else if (presetDate && isOpen) {
       // presetDate is a Date object
       const iso = new Date(presetDate).toISOString().slice(0,10);
       setForm((f) => ({ ...f, date: iso }));
@@ -61,7 +75,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
         setLoadingInstructors(false);
       }
     })();
-  }, [presetDate, isOpen]);
+  }, [presetDate, isOpen, eventToEdit]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -144,7 +158,26 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
     (async () => {
       try {
         const api = await import("../api");
-        const res = await api.createEvent(newEvent);
+        let res;
+        
+        // If editing, use PUT request; otherwise use POST
+        if (eventToEdit && eventToEdit._id) {
+          // Update existing event
+          const token = localStorage.getItem('token');
+          const response = await fetch(`/api/events/${eventToEdit._id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token ? `Bearer ${token}` : undefined,
+            },
+            body: JSON.stringify(newEvent),
+          });
+          res = await response.json();
+        } else {
+          // Create new event
+          res = await api.createEvent(newEvent);
+        }
+        
         // Success when server returns created event with _id
         if (res && res._id) {
           onAdd({
@@ -162,7 +195,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
           });
         } else if (res && (res.message || res.error)) {
           // Server-side validation error or other rejection - show to user and do not save locally
-          setFormError(res.message || res.error || 'Failed to create event');
+          setFormError(res.message || res.error || (eventToEdit ? 'Failed to update event' : 'Failed to create event'));
           return;
         } else {
           // Unknown server response - treat as network fallback and save locally
@@ -250,7 +283,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
     <div className="modal-backdrop">
       <div className="modal-panel">
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 style={{ marginBottom: 0 }}>Add New Event</h5>
+          <h5 style={{ marginBottom: 0 }}>{eventToEdit ? 'Edit Event' : 'Add New Event'}</h5>
           <button className="btn btn-light btn-sm" onClick={onClose}>
             ✕
           </button>
@@ -392,7 +425,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
               Cancel
             </button>
             <button type="submit" className="btn btn-modal" disabled={loadingInstructors}>
-              Add Event
+              {eventToEdit ? 'Update Event' : 'Add Event'}
             </button>
           </div>
         </form>
@@ -405,6 +438,7 @@ function Schedule() {
   // For privacy, start with no events shown — users see only their own events
   const [classes, setClasses] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState(null);
   const [isSmallChatOpen, setIsSmallChatOpen] = useState(false);
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || 'student');
   const [presetDate, setPresetDate] = useState(null);
@@ -1104,6 +1138,17 @@ function Schedule() {
   }, []);
 
   // Allow owner (instructor/admin) to delete their own events
+  const handleEditEvent = (evt) => {
+    if (!evt) return;
+    // Set the event to edit and populate the form
+    setEventToEdit(evt);
+    // Parse the event date and set preset date
+    const eventDate = new Date(evt.date);
+    setPresetDate(eventDate);
+    // Open the modal
+    setIsAddOpen(true);
+  };
+
   const handleDeleteEvent = async (evt) => {
     try {
       if (!evt) return;
@@ -1419,16 +1464,24 @@ function Schedule() {
                       (classItem.instructorId && classItem.instructorId.toString() === userProfile._id.toString()) ||
                       (classItem.createdByUserId && classItem.createdByUserId.toString() === userProfile._id.toString())
                     ))) && (
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
-                            handleDeleteEvent(classItem);
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
+                      <>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleEditEvent(classItem)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => {
+                            if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
+                              handleDeleteEvent(classItem);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                     {classItem.status === 'Completed' ? (
                       <button
@@ -1596,7 +1649,11 @@ function Schedule() {
         {/* Add Event Modal */}
         <AddEventModal
           isOpen={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
+          onClose={() => {
+            setIsAddOpen(false);
+            setEventToEdit(null);
+          }}
+          eventToEdit={eventToEdit}
           onAdd={(evt) => {
             try {
               // For events created without server persistence (network fallback)

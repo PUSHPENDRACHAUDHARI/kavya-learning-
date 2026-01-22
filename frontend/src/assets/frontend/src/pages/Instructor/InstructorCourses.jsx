@@ -178,6 +178,8 @@ const InstructorCourses = () => {
                 placeholder="Price" 
                 value={formData.price} 
                 onChange={handleChange} 
+                min="1" 
+                step="0.01"
                 className="form-control" 
               />
               <input 

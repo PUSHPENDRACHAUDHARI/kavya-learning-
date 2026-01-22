@@ -5,7 +5,7 @@ import { Calendar, Bell } from "lucide-react";
 import "../assets/schedule.css";
 import AppLayout from "../components/AppLayout";
  
-function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
+function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEdit }) {
   const [form, setForm] = useState({
     title: "",
     instructor: "",
@@ -21,7 +21,19 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
   const [instructorsError, setInstructorsError] = useState(null);
 
   useEffect(() => {
-    if (presetDate) {
+    // If editing, populate form with event data
+    if (eventToEdit && isOpen) {
+      setForm({
+        title: eventToEdit.title || "",
+        instructor: eventToEdit.instructor || "",
+        type: eventToEdit.type || "Live Class",
+        date: eventToEdit.date || "",
+        startTime: eventToEdit.startTime || "",
+        endTime: eventToEdit.endTime || "",
+        location: eventToEdit.location || "",
+        maxStudents: eventToEdit.maxStudents || 30,
+      });
+    } else if (presetDate && isOpen) {
       // presetDate is a Date object
       const iso = new Date(presetDate).toISOString().slice(0,10);
       setForm((f) => ({ ...f, date: iso }));
@@ -42,7 +54,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
         setLoadingInstructors(false);
       }
     })();
-  }, [presetDate, isOpen]);
+  }, [presetDate, isOpen, eventToEdit]);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -142,7 +154,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
     <div className="modal-backdrop">
       <div className="modal-panel">
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 style={{ marginBottom: 0 }}>Add New Event</h5>
+          <h5 style={{ marginBottom: 0 }}>{eventToEdit ? 'Edit Event' : 'Add New Event'}</h5>
           <button className="btn btn-light btn-sm" onClick={onClose}>
             ✕
           </button>
@@ -251,7 +263,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate }) {
               Cancel
             </button>
             <button type="submit" className="btn btn-modal" disabled={loadingInstructors}>
-              Add Event
+              {eventToEdit ? 'Update Event' : 'Add Event'}
             </button>
           </div>
         </form>
@@ -264,6 +276,7 @@ function Schedule() {
   // For privacy, start with no events shown — users see only their own events
   const [classes, setClasses] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [eventToEdit, setEventToEdit] = useState(null);
   const [isSmallChatOpen, setIsSmallChatOpen] = useState(false);
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || 'student');
   const [presetDate, setPresetDate] = useState(null);
@@ -1114,43 +1127,51 @@ function Schedule() {
                       (classItem.instructorId && classItem.instructorId.toString() === userProfile._id.toString()) ||
                       (classItem.createdByUserId && classItem.createdByUserId.toString() === userProfile._id.toString())
                     ))) && (
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => {
-                          if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
-                            // simple client-side delete via API
-                            (async () => {
-                              try {
-                                if (classItem._id) {
-                                  const token = localStorage.getItem('token');
-                                  const resp = await fetch(`/api/events/${classItem._id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : undefined } });
-                                  if (!resp.ok) {
-                                    const d = await resp.json().catch(() => ({}));
-                                    alert(d.message || 'Failed to delete event');
-                                    return;
+                      <>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleEditEvent(classItem)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => {
+                            if (confirm(`Delete event "${classItem.title}"? This cannot be undone.`)) {
+                              // simple client-side delete via API
+                              (async () => {
+                                try {
+                                  if (classItem._id) {
+                                    const token = localStorage.getItem('token');
+                                    const resp = await fetch(`/api/events/${classItem._id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : undefined } });
+                                    if (!resp.ok) {
+                                      const d = await resp.json().catch(() => ({}));
+                                      alert(d.message || 'Failed to delete event');
+                                      return;
+                                    }
                                   }
+                                  // remove locally (use normalized key)
+                                  setUpcomingClasses(prev => (prev || []).filter(p => {
+                                    try { return !(p._id && classItem._id && p._id === classItem._id) && !(p._local && eventKey(p) === eventKey(classItem)); }
+                                    catch (err) { return !(p._id && classItem._id && p._id === classItem._id) && !(p.title === classItem.title && p.date === classItem.date && p.time === classItem.time); }
+                                  }));
+                                  setClasses(prev => (prev || []).filter(c => {
+                                    try { return !(c._id && classItem._id && c._id === classItem._id) && !(c._local && eventKey(c) === eventKey(classItem)); }
+                                    catch (err) { return !(c._id && classItem._id && c._id === classItem._id) && !(c.title === classItem.title && c.date === classItem.date && c.time === classItem.time); }
+                                  }));
+                                  removeLocalEventFromStorage(classItem);
+                                  setUpcomingCount(c => Math.max(0, (c || 0) - 1));
+                                } catch (err) {
+                                  console.warn('Failed to delete event', err);
+                                  alert('Failed to delete event: ' + (err.message || err));
                                 }
-                                // remove locally (use normalized key)
-                                setUpcomingClasses(prev => (prev || []).filter(p => {
-                                  try { return !(p._id && classItem._id && p._id === classItem._id) && !(p._local && eventKey(p) === eventKey(classItem)); }
-                                  catch (err) { return !(p._id && classItem._id && p._id === classItem._id) && !(p.title === classItem.title && p.date === classItem.date && p.time === classItem.time); }
-                                }));
-                                setClasses(prev => (prev || []).filter(c => {
-                                  try { return !(c._id && classItem._id && c._id === classItem._id) && !(c._local && eventKey(c) === eventKey(classItem)); }
-                                  catch (err) { return !(c._id && classItem._id && c._id === classItem._id) && !(c.title === classItem.title && c.date === classItem.date && c.time === classItem.time); }
-                                }));
-                                removeLocalEventFromStorage(classItem);
-                                setUpcomingCount(c => Math.max(0, (c || 0) - 1));
-                              } catch (err) {
-                                console.warn('Failed to delete event', err);
-                                alert('Failed to delete event: ' + (err.message || err));
-                              }
-                            })();
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
+                              })();
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1300,7 +1321,11 @@ function Schedule() {
         {/* Add Event Modal */}
         <AddEventModal
           isOpen={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
+          onClose={() => {
+            setIsAddOpen(false);
+            setEventToEdit(null);
+          }}
+          eventToEdit={eventToEdit}
           onAdd={(evt) => {
               // For admin/instructor-created events that are persisted on the server
               // the backend's upcoming endpoint may not return them for admins (enrollment filter).

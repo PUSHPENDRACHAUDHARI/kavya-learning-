@@ -37,7 +37,7 @@ export default function Profile() {
   const [profile, setProfile] = useState({
     initials: "",
     name: "",
-    bio: "Passionate learner exploring web development and computer science. On a mission to master full-stack development!",
+    bio: " ",
     email: "",
     phone: "+91 ",
     location: "",

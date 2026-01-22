@@ -30,7 +30,7 @@ const generateToken = (userId, userRole) => {
 // @access  Public
 exports.registerUser = async (req, res) => {
     try {
-        const { fullName, email, password, role, phone, gender, bio, location, address, avatar } = req.body;
+        const { fullName, email, password, role, phone, gender, age, bio, location, address, avatar } = req.body;
         // Prevent creating admin accounts via registration endpoint.
         // Only the hardcoded admin credentials are accepted via login.
         if (role === 'admin' || (email && email.toLowerCase() === ADMIN_EMAIL)) {
@@ -62,6 +62,7 @@ exports.registerUser = async (req, res) => {
             role: userRole,
             phone: phone || undefined,
             gender: gender || undefined,
+            age: age || undefined,
             bio: bio || undefined,
             location: location || undefined,
             address: normalizedAddress,
@@ -94,6 +95,7 @@ exports.registerUser = async (req, res) => {
                     role: user.role,
                     phone: user.phone || null,
                     gender: user.gender || null,
+                    age: user.age || null,
                     bio: user.bio || null,
                     location: user.location || null,
                     address: user.address || null,
