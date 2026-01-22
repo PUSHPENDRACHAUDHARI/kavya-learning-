@@ -1398,6 +1398,8 @@ export default function Courses() {
   // Course metadata (defaults to 0 when not available)
   const [enrolledCount, setEnrolledCount] = useState(0);
   const [courseRating, setCourseRating] = useState(0);
+  const [lessonsCount, setLessonsCount] = useState(0);
+  const [totalDurationDisplay, setTotalDurationDisplay] = useState('0 hours');
 
   // Enrollment and watched lessons state
   // 'enrolled' controls whether the student can access lessons
@@ -1569,11 +1571,36 @@ export default function Courses() {
         const isValidObjectId = (id) => !!id && /^[0-9a-fA-F]{24}$/.test(id);
 
         // Helper to check enrollment via course endpoint (preferred when we have a valid id)
+        // If authenticated as student, prefer the student-specific endpoint which reflects
+        // changes made to the user's enrolledCourses subdocument by lesson completion.
         const fetchStatusByCourse = async (cId) => {
           try {
-            const res = await fetch(`/api/enrollments/course/${cId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) return null;
-            return await res.json();
+            // If we have a token, try the student-specific endpoint first
+            if (token) {
+              try {
+                const res = await fetch(`/api/student/courses/${cId}`, { headers: { Authorization: `Bearer ${token}` } });
+                if (res && res.ok) {
+                  const body = await res.json();
+                  // Student route returns { success: true, data: { course, enrollment } }
+                  if (body && body.data && body.data.enrollment) {
+                    return {
+                      enrolled: body.data.enrollment.enrollmentStatus === 'active' || body.data.enrollment.enrollmentStatus === true || body.data.enrollment.isLocked === false,
+                      status: body.data.enrollment.enrollmentStatus || null,
+                      enrollmentId: body.data.enrollment._id || null,
+                      progressPercentage: typeof body.data.enrollment.progressPercentage === 'number' ? body.data.enrollment.progressPercentage : (typeof body.data.enrollment.completionPercentage === 'number' ? body.data.enrollment.completionPercentage : 0),
+                      completed: body.data.enrollment.completed || false
+                    };
+                  }
+                }
+              } catch (e) {
+                // fallthrough to enrollments route
+              }
+            }
+
+            // Fallback to enrollments collection route
+            const res2 = await fetch(`/api/enrollments/course/${cId}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res2.ok) return null;
+            return await res2.json();
           } catch (e) {
             return null;
           }
@@ -1835,10 +1862,40 @@ export default function Courses() {
               videoLink: toEmbedUrl(l.videoUrl || l.videoLink || l.content || '')
             }));
             if (active) setCourseLessons(mapped);
+            // Compute stats: lessons count and total duration (sum of lesson.duration)
+            try {
+              const lc = sorted.length;
+              setLessonsCount(lc);
+              const totalMinutes = sorted.reduce((s, it) => s + (typeof it.duration === 'number' ? it.duration : (parseFloat(it.duration) || 0)), 0);
+              // Format: prefer hours when >=60 minutes
+              if (totalMinutes >= 60) {
+                const hours = totalMinutes / 60;
+                setTotalDurationDisplay(`${parseFloat(hours.toFixed(1))} hours`);
+              } else if (totalMinutes > 0) {
+                setTotalDurationDisplay(`${totalMinutes} min`);
+              } else {
+                setTotalDurationDisplay('0 hours');
+              }
+            } catch (e) {}
           }
         } catch (e) {
           // ignore mapping errors
         }
+        // Course-level stats: enrolled count and rating
+        try {
+          if (course.enrolledStudents && Array.isArray(course.enrolledStudents)) {
+            setEnrolledCount(course.enrolledStudents.length);
+          }
+          if (course.reviews && Array.isArray(course.reviews) && course.reviews.length) {
+            const raw = course.reviews.filter(r => typeof r.rating === 'number');
+            if (raw.length) {
+              const avg = raw.reduce((s, r) => s + (r.rating || 0), 0) / raw.length;
+              setCourseRating(parseFloat(avg.toFixed(1)));
+            } else {
+              setCourseRating(0);
+            }
+          }
+        } catch (e) {}
       } catch (err) {
         // ignore errors
       }
@@ -2229,23 +2286,6 @@ export default function Courses() {
   const totalLessons = (courseLessons && courseLessons.length)
     ? courseLessons.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0)
     : gettingStarted.length + coreConcepts.length + practicalApplications.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0);
-
-  const watchedCount = (enrolled && currentCourseId) ? getWatchedFor(currentCourseId).length : 0;
-  let progressPercent = 0;
-  if (!enrolled) {
-    progressPercent = 0;
-  } else if (!serverProgressLoaded) {
-    // show 0 until server confirms enrollment/progress
-    progressPercent = 0;
-  } else if (serverProgressValue !== null) {
-    // Prefer server-provided progress when available
-    progressPercent = serverProgressValue;
-  } else {
-    progressPercent = totalLessons > 0 ? Math.round((watchedCount / totalLessons) * 100) : 0;
-  }
-
-
-
   // Helper: Get all lessons in order across modules (for sequential unlocking)
   // Prefer backend lessons if present; otherwise use demo modules + newModules
   const allLessonsInOrder = (courseLessons && courseLessons.length)
@@ -2256,6 +2296,155 @@ export default function Courses() {
         ...practicalApplications,
         ...(newModules ? newModules.flatMap(m => m.lessons || []) : [])
       ];
+
+  // Compute watched count robustly: count each lesson at most once even if stored by _id and title
+  const rawWatched = (enrolled && currentCourseId) ? (getWatchedFor(currentCourseId) || []) : [];
+  const watchedCount = (enrolled && currentCourseId)
+    ? allLessonsInOrder.reduce((acc, l) => {
+        if (!l) return acc;
+        const id = l._id;
+        const title = l.title;
+        if ((id && rawWatched.includes(id)) || (title && rawWatched.includes(title))) return acc + 1;
+        return acc;
+      }, 0)
+    : 0;
+
+  let progressPercent = 0;
+  if (!enrolled) {
+    progressPercent = 0;
+  } else if (!serverProgressLoaded) {
+    // show 0 until server confirms enrollment/progress
+    progressPercent = 0;
+  } else if (serverProgressValue !== null) {
+    // Prefer server-provided progress when available
+    // Ensure server value is clamped between 0 and 100
+    progressPercent = Math.max(0, Math.min(100, Number(serverProgressValue) || 0));
+  } else {
+    if (totalLessons > 0) {
+      const lessonWeight = 100 / totalLessons;
+      const rawProgress = watchedCount * lessonWeight;
+      progressPercent = parseFloat(rawProgress.toFixed(2));
+      progressPercent = Math.max(0, Math.min(100, progressPercent));
+    } else {
+      progressPercent = 0;
+    }
+  }
+
+  // Helper to start a lesson: opens player, persists watched state, optimistic UI update,
+  // unlocks next lesson and calls backend to mark completion.
+  const handleStartLesson = async (lesson, onVideoClick, isLocked, isLessonsUnlockedBySequence) => {
+    if (isLocked) {
+      if (!enrolled) {
+        alert("Please enroll in this course to access lessons.");
+      } else if (!isLessonsUnlockedBySequence) {
+        alert("Please complete the previous lesson first.");
+      }
+      return;
+    }
+
+    // Open lesson in player
+    if (onVideoClick) {
+      onVideoClick(lesson);
+    } else if (lesson.videoLink) {
+      setActiveLessonVideo(lesson.videoLink);
+      setActiveLessonTitle(lesson.title);
+    }
+
+    // Persist watched
+    if (lesson.title) {
+      const prevArr = getWatchedFor(currentCourseId) || [];
+      const updated = [...prevArr];
+      if (lesson._id && !updated.includes(lesson._id)) updated.push(lesson._id);
+      if (!updated.includes(lesson.title)) updated.push(lesson.title);
+      persistWatchedFor(currentCourseId, updated);
+
+      try {
+        // Compute unique completed lesson count from updated raw entries (which may contain ids and titles)
+        const completedCount = allLessonsInOrder.reduce((acc, l) => {
+          if (!l) return acc;
+          const id = l._id;
+          const title = l.title;
+          if ((id && updated.includes(id)) || (title && updated.includes(title))) return acc + 1;
+          return acc;
+        }, 0);
+        const lessonWeight = totalLessons > 0 ? 100 / totalLessons : 0;
+        const optimisticPercent = parseFloat((completedCount * lessonWeight).toFixed(2));
+        setServerProgressValue(optimisticPercent);
+        setServerProgressLoaded(true);
+
+        // Unlock next lesson optimistically
+        try {
+          const currentIdx = allLessonsInOrder.findIndex(l => (l._id && lesson._id) ? l._id === lesson._id : l.title === lesson.title);
+          const next = currentIdx >= 0 ? allLessonsInOrder[currentIdx + 1] : null;
+          if (next) {
+            if (courseLessons && courseLessons.find(cl => (cl._id && next._id) ? cl._id === next._id : cl.title === next.title)) {
+              setCourseLessons(prev => prev.map(cl => (((cl._id && next._id) ? cl._id === next._id : cl.title === next.title) ? { ...cl, status: 'Start', iconClass: 'bi-play-circle', iconBgClass: 'lesson-icon', actionClass: 'lesson-action' } : cl)));
+            }
+
+            try {
+              setNewModules(prevModules => prevModules.map(mod => ({
+                ...mod,
+                lessons: (mod.lessons || []).map(lsn => (((lsn._id && next._id) ? lsn._id === next._id : lsn.title === next.title) ? { ...lsn, status: 'Start', iconClass: 'bi-play-circle', iconBgClass: 'lesson-icon', actionClass: 'lesson-action' } : lsn))
+              })));
+            } catch (e) {}
+          }
+        } catch (e) {}
+      } catch (e) {}
+
+      // Background: call backend to mark lesson complete and track hours
+      (async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const courseId = new URLSearchParams(location.search || window.location.search).get('id');
+          if (!token || !courseId) return;
+
+          const lessonsRes = await fetch(`/api/courses/${courseId}`, {
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+          });
+          if (!lessonsRes.ok) return;
+          const courseData = await lessonsRes.json();
+          const backendLesson = courseData.lessons?.find(l => l.title === lesson.title);
+          if (!backendLesson || !backendLesson._id) return;
+
+          const hoursSpent = 0.75;
+          const completeRes = await fetch(`/api/student/courses/${courseId}/lessons/${backendLesson._id}/complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ hoursSpent })
+          });
+          if (completeRes.ok) {
+            const data = await completeRes.json();
+            // Update server-progress state from backend authoritative response
+            try {
+              if (data && typeof data.data?.completionPercentage === 'number') {
+                setServerProgressValue(Math.max(0, Math.min(100, Number(data.data.completionPercentage))));
+                setServerProgressLoaded(true);
+              } else if (data && typeof data.completionPercentage === 'number') {
+                setServerProgressValue(Math.max(0, Math.min(100, Number(data.completionPercentage))));
+                setServerProgressLoaded(true);
+              }
+            } catch (e) {}
+            window.dispatchEvent(new Event('enrollmentUpdated'));
+          } else {
+            const errorText = await completeRes.text();
+            console.warn('Failed to complete lesson:', errorText);
+          }
+        } catch (err) {
+          console.warn('Error marking lesson complete:', err);
+        }
+      })();
+
+      // Persist completion date if course finished
+      try {
+        const courseIdForKey = new URLSearchParams(location.search || window.location.search).get('id') || window.localStorage.getItem('currentCourseId');
+        const key = getCompletionStorageKey(userProfile, courseIdForKey);
+        if (enrolled && Array.isArray(updated) && completedCount === totalLessons) {
+          const nowIso = new Date().toISOString();
+          window.localStorage.setItem(key, nowIso);
+        }
+      } catch (err) { console.warn('Could not persist course completion date', err); }
+    }
+  };
 
   // Function to render a curriculum list with sequential unlocking
   const renderCurriculumList = (list, onVideoClick, moduleKey = null) => (
@@ -2272,14 +2461,16 @@ export default function Courses() {
                 let dynamicIconClass = lesson.iconClass;
                 let dynamicBgClass = lesson.iconBgClass;
                 
-                const isWatched = getWatchedFor(currentCourseId).includes(lesson.title);
-                const currentLessonIndex = allLessonsInOrder.findIndex(l => l.title === lesson.title);
+                const watchedList = getWatchedFor(currentCourseId) || [];
+                const isWatched = (lesson._id && watchedList.includes(lesson._id)) || watchedList.includes(lesson.title);
+                const currentLessonIndex = allLessonsInOrder.findIndex(l => (l._id && lesson._id) ? l._id === lesson._id : l.title === lesson.title);
                 
                 // Check if previous lesson is watched (for sequential unlocking)
                 let isPreviousLessonWatched = true;
                 if (currentLessonIndex > 0) {
                   const previousLesson = allLessonsInOrder[currentLessonIndex - 1];
-                  isPreviousLessonWatched = getWatchedFor(currentCourseId).includes(previousLesson.title);
+                  const prevWatchedList = getWatchedFor(currentCourseId) || [];
+                  isPreviousLessonWatched = (previousLesson._id && prevWatchedList.includes(previousLesson._id)) || prevWatchedList.includes(previousLesson.title);
                 }
                 
                 // Determine if lesson is available (first lesson or previous watched)
@@ -2322,15 +2513,16 @@ export default function Courses() {
             (() => {
               let visibleLabel = lesson.status;
 
-              // Check if lesson is watched
-              const isWatched = getWatchedFor(currentCourseId).includes(lesson.title);
+
+              const watchedList2 = getWatchedFor(currentCourseId) || [];
+              const isWatched = (lesson._id && watchedList2.includes(lesson._id)) || watchedList2.includes(lesson.title);
 
               // Pre-compute sequence unlocking so it can be referenced in onClick as well
-              const currentLessonIndex = allLessonsInOrder.findIndex(l => l.title === lesson.title);
+              const currentLessonIndex = allLessonsInOrder.findIndex(l => (l._id && lesson._id) ? l._id === lesson._id : l.title === lesson.title);
               let isPreviousLessonWatched = true;
               if (currentLessonIndex > 0) {
                 const previousLesson = allLessonsInOrder[currentLessonIndex - 1];
-                isPreviousLessonWatched = getWatchedFor(currentCourseId).includes(previousLesson.title);
+                isPreviousLessonWatched = (previousLesson._id && watchedList2.includes(previousLesson._id)) || watchedList2.includes(previousLesson.title);
               }
               const isLessonsUnlockedBySequence = currentLessonIndex === 0 || isPreviousLessonWatched;
 
@@ -2354,113 +2546,10 @@ export default function Courses() {
                   disabled={isLocked}
                   onClick={(e) => {
                     e.preventDefault();
-
-                    if (isLocked) {
-                      // Prompt to enroll when locked
-                      if (!enrolled) {
-                        alert("Please enroll in this course to access lessons.");
-                      } else if (!isLessonsUnlockedBySequence) {
-                        alert("Please complete the previous lesson first.");
-                      }
-                      return;
-                    }
-
-                    // When visible as Start, play the lesson
-                    if (onVideoClick) {
-                      onVideoClick(lesson);
-                    } else if (lesson.videoLink) {
-                      setActiveLessonVideo(lesson.videoLink);
-                      setActiveLessonTitle(lesson.title);
-                    }
-
-                    // Mark lesson as watched (persisted). Only add once.
-                    if (lesson.title) {
-                      // persist per-user watched lessons scoped to course
-                      const prevArr = getWatchedFor(currentCourseId);
-                      if (!prevArr.includes(lesson.title)) {
-                        const updated = [...prevArr, lesson.title];
-                        persistWatchedFor(currentCourseId, updated);
-                        try {
-                          // Optimistically update displayed server progress so UI reflects new progress
-                          const optimisticPercent = totalLessons > 0 ? Math.round((updated.length / totalLessons) * 100) : 0;
-                          setServerProgressValue(optimisticPercent);
-                          setServerProgressLoaded(true);
-                        } catch (e) {}
-
-                        // Call backend API to track hours and mark lesson complete
-                        (async () => {
-                          try {
-                            const token = localStorage.getItem('token');
-                            const courseId = new URLSearchParams(location.search || window.location.search).get('id');
-                            
-                            if (!token || !courseId) {
-                              console.log('⚠️ No token or courseId, skipping backend lesson completion');
-                              return;
-                            }
-                            
-                            // Get course lessons to find the lesson ID
-                            const lessonsRes = await fetch(`/api/courses/${courseId}`, {
-                              headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`
-                              }
-                            });
-                            
-                            if (!lessonsRes.ok) {
-                              console.warn('⚠️ Failed to fetch course details');
-                              return;
-                            }
-                            
-                            const courseData = await lessonsRes.json();
-                            const backendLesson = courseData.lessons?.find(l => l.title === lesson.title);
-                            
-                            if (!backendLesson || !backendLesson._id) {
-                              console.log('⚠️ Lesson not found in backend, title:', lesson.title);
-                              return;
-                            }
-                            
-                            // Each lesson is assumed to be 0.75 hours (45 minutes)
-                            const hoursSpent = 0.75;
-                            
-                            const completeRes = await fetch(`/api/student/courses/${courseId}/lessons/${backendLesson._id}/complete`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`
-                              },
-                              body: JSON.stringify({ hoursSpent })
-                            });
-                            
-                            if (completeRes.ok) {
-                              const data = await completeRes.json();
-                              console.log('✅ Lesson completed! Hours tracked:', data);
-                              // Trigger Dashboard and Profile refresh
-                              window.dispatchEvent(new Event('enrollmentUpdated'));
-                            } else {
-                              const errorText = await completeRes.text();
-                              console.warn('⚠️ Failed to complete lesson:', errorText);
-                            }
-                          } catch (err) {
-                            console.warn('⚠️ Error marking lesson complete:', err);
-                          }
-                        })();
-
-                        // If the updated watched list completes the course, persist a completion date
-                        try {
-                          const courseIdForKey = new URLSearchParams(location.search || window.location.search).get('id') || window.localStorage.getItem('currentCourseId');
-                          const key = getCompletionStorageKey(userProfile, courseIdForKey);
-                          if (enrolled && Array.isArray(updated) && updated.length === totalLessons) {
-                            const nowIso = new Date().toISOString();
-                            window.localStorage.setItem(key, nowIso);
-                          }
-                        } catch (err) {
-                          console.warn('Could not persist course completion date', err);
-                        }
-
-                        }
-                      }
-                    }}
-                  >
+                    const isLockedFlag = visibleLabel === "Locked" || lesson.status === "Locked";
+                    handleStartLesson(lesson, onVideoClick, isLockedFlag, isLessonsUnlockedBySequence);
+                  }}
+                >
                   {visibleLabel}
                 </button>
               );
@@ -2737,7 +2826,7 @@ export default function Courses() {
                 </div>
                 <div>
                   <div className="stat-title">Total Duration</div>
-                  <div className="stat-value">8 hours</div>
+                  <div className="stat-value">{totalDurationDisplay}</div>
                 </div>
               </div>
             </div>
@@ -2771,7 +2860,7 @@ export default function Courses() {
                 </div>
                 <div>
                   <div className="stat-title"> Lessons</div>
-                  <div className="stat-value">24 </div>
+                  <div className="stat-value">{lessonsCount}</div>
                 </div>
               </div>
             </div>

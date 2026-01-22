@@ -78,6 +78,38 @@ exports.listUsers = async (req, res) => {
     
     const users = await query.exec();
     const total = await User.countDocuments(filter);
+    // If listing students, enrich each student with their assigned parent (if any).
+    if (role === 'student' && users && users.length) {
+      try {
+        const studentIds = users.map(u => u._id);
+        // Find parents who reference any of these students in their `children` array
+        const parents = await User.find({ role: 'parent', children: { $in: studentIds } }).select('fullName email phone children');
+        // Build lookup: childId -> parent
+        const parentLookup = {};
+        parents.forEach(p => {
+          (p.children || []).forEach(childId => {
+            const key = String(childId);
+            // prefer first found parent
+            if (!parentLookup[key]) parentLookup[key] = { _id: p._id, fullName: p.fullName, email: p.email, phone: p.phone };
+          });
+        });
+
+        // Attach `parent` field to student objects (plain JS conversion)
+        const usersWithParent = users.map(u => {
+          const obj = u.toObject ? u.toObject() : u;
+          const p = parentLookup[String(u._id)];
+          if (p) obj.parent = p;
+          return obj;
+        });
+
+        return res.json({ data: usersWithParent, total });
+      } catch (e) {
+        // If parent lookup fails, return users without parent enrichment
+        console.warn('Parent enrichment failed:', e.message || e);
+        return res.json({ data: users, total });
+      }
+    }
+
     res.json({ data: users, total });
   } catch (err) {
     res.status(400).json({ message: err.message });
