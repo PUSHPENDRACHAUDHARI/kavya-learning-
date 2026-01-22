@@ -32,27 +32,30 @@
    Back Button
 ================================ */
 .back-button {
-  min-width: 260px;
-  max-width: 320px;
+  width: auto;
+  min-width: 120px;
   height: 48px;              /* 🔑 SAME height as Add button */
-  padding: 0 20px;           /* 🔑 horizontal padding only */
+  padding: 0 24px;           /* 🔑 horizontal padding */
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  background: #f2f2f2;
-  border: 1px solid #ddd;
+  background: #2b6cb0;
+  border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
   white-space: nowrap;
   margin: 0;                 /* 🔑 reset bootstrap margins */
+  transition: all 0.3s ease;
 }
 
 .back-button:hover {
-  background: #e6e6e6;
-  border-color: #ccc;
+  background: #1e4f7f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(43, 108, 176, 0.3);
 }
 
 /* ===============================
@@ -60,11 +63,14 @@
 ================================ */
 .courses-header .btn {
   height: 48px;              /* 🔑 SAME height */
-  padding: 0 20px;
+  padding: 0 24px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   white-space: nowrap;
   margin: 0;                 /* 🔑 reset bootstrap margins */
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ===============================
