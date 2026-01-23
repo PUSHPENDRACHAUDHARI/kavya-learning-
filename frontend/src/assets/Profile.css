@@ -271,7 +271,7 @@ body {
   font-weight: 800;
   color: #0f2b57;
   margin: 0;
-  align-self: flex-end;
+  align-self: center;
 }
 
 /* Make the cards content horizontally centered on larger screens */

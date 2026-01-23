@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from 'axios';
 import AppLayout from "../components/AppLayout";
 import SmallChatBox from "../components/SmallChatBox";
@@ -38,7 +38,7 @@ export default function Profile() {
   const [profile, setProfile] = useState({
     initials: "",
     name: "",
-    bio: " ",
+    bio: "",
     email: "",
     phone: "+91 ",
     location: "",
@@ -162,15 +162,53 @@ export default function Profile() {
           if (progress && progress.stats) {
             console.log('📚 Profile: Courses Enrolled =', progress.stats.enrolledCourses ?? 0);
             console.log('⏰ Profile: Hours Learned =', progress.stats.learningHours ?? 0);
+            // Normalize avgScore: backend may return fraction (0-1) or percent (0-100)
+            let avgRaw = progress.stats.avgScore ?? 0;
+            if (typeof avgRaw === 'string') {
+              const parsed = parseFloat(avgRaw);
+              avgRaw = isNaN(parsed) ? 0 : parsed;
+            }
+            if (typeof avgRaw === 'number' && avgRaw > 0 && avgRaw <= 1) avgRaw = Math.round(avgRaw * 100);
+            const avgDisplay = `${avgRaw ?? 0}%`;
             setProfile((prev) => ({
               ...prev,
               stats: {
                 courses: progress.stats.enrolledCourses ?? 0,
                 hours: progress.stats.learningHours ?? 0,
                 achievements: progress.stats.achievements ?? 0,
-                avg: `${progress.stats.avgScore ?? 0}%`,
+                avg: avgDisplay,
               },
             }));
+
+            // Attempt to fetch leaderboard's per-user ranking to get authoritative avg score
+            try {
+              const token = localStorage.getItem('token');
+              const mr = await fetch('/api/achievements/my-ranking', {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: token ? `Bearer ${token}` : undefined,
+                },
+              });
+
+              if (mr && mr.ok) {
+                const mrJson = await mr.json();
+                // Try several possible field names for average score
+                let leaderboardAvg = mrJson.avgScore ?? mrJson.averageScore ?? mrJson.avg ?? mrJson.average_score ?? 0;
+                if (typeof leaderboardAvg === 'string') {
+                  const parsed = parseFloat(leaderboardAvg);
+                  leaderboardAvg = isNaN(parsed) ? 0 : parsed;
+                }
+                if (typeof leaderboardAvg === 'number' && leaderboardAvg > 0 && leaderboardAvg <= 1) leaderboardAvg = Math.round(leaderboardAvg * 100);
+                const leaderboardAvgDisplay = `${leaderboardAvg ?? 0}%`;
+                // If leaderboard provides a meaningful avg, prefer it over progress endpoint
+                if (leaderboardAvgDisplay && leaderboardAvgDisplay !== '0%') {
+                  setProfile((p) => ({ ...p, stats: { ...p.stats, avg: leaderboardAvgDisplay } }));
+                }
+              }
+            } catch (e) {
+              // Non-fatal — keep progress overview avg when leaderboard unavailable
+              console.warn('Could not load leaderboard my-ranking for avg score', e);
+            }
           }
 
           if (progress && Array.isArray(progress.skills)) {
@@ -178,7 +216,8 @@ export default function Profile() {
           }
 
           if (progress && Array.isArray(progress.certificates)) {
-            setCertificates(progress.certificates);
+            // Seed certificates from progress endpoint
+              // certificates removed from profile view per request
           }
 
           if (progress && Array.isArray(progress.recentActivity)) {
@@ -254,6 +293,7 @@ export default function Profile() {
   const [activities, setActivities] = useState([]);
 
   const [certificates, setCertificates] = useState([]);
+  const previewUrlsRef = useRef([]);
 
   const prefs = {
     goal: "2 hours",
@@ -262,60 +302,7 @@ export default function Profile() {
     notifications: "Enabled",
   };
 
-  const handleDownloadCertificate = async (cert) => {
-    if (!cert.courseId || cert.status === "Pending") return;
-    try {
-      setLoadingCertCourseId(cert.courseId);
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `/api/progress/certificates/${cert.courseId}/download`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!response.ok) {
-        // Check if response is JSON (error) or PDF (success)
-        const contentType = response.headers.get("content-type");
-        let errorMsg = `Failed to download certificate (${response.status})`;
-        if (contentType?.includes("json")) {
-          try {
-            const errData = await response.json();
-            errorMsg = errData.message || errorMsg;
-          } catch (e) {
-            // If JSON parsing fails, use the status message
-          }
-        }
-        throw new Error(errorMsg);
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const safeTitle = (cert.title || "Course").replace(/[^a-z0-9]/gi, "_");
-      link.download = `${safeTitle}_Certificate.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      // Optimistically update status in the UI
-      setCertificates((prev) =>
-        prev.map((c) =>
-          c.courseId === cert.courseId ? { ...c, status: "Downloaded" } : c
-        )
-      );
-    } catch (err) {
-      alert(
-        err?.message ||
-          "Certificate is not yet available. Please complete the course first."
-      );
-    } finally {
-      setLoadingCertCourseId(null);
-    }
-  };
+  
 
   const handleChange = (e) => {
   const { name, value } = e.target;
@@ -524,7 +511,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              <p className="profile-bio">{profile.bio || 'write about yourself'}</p>
+              <p className="profile-bio">{(profile.bio && String(profile.bio).trim()) ? profile.bio : 'Write about yourself'}</p>
               <div className="profile-contacts">
                 <div className="left">
                   <div className="contact-item">
@@ -638,11 +625,19 @@ export default function Profile() {
           <div className="left-column">
             <div className="certificates-section">
               <div className="certificates-header">
-                <h3>Certificates</h3>
-                <button className="view-all-btn">View All</button>
+                {/* <h3>Certificates</h3>
+                <button className="view-all-btn">View All</button> */}
               </div>
               <div className="certificates-grid">
-                {certificates.map((cert, i) => (
+                {(() => {
+                  const downloaded = (certificates || []).filter((c) => c.status === 'Downloaded');
+                  if (downloaded.length === 0) {
+                    return (
+                      <>
+                      </>
+                    );
+                  }
+                  return downloaded.map((cert, i) => (
                   <div className="certificate-card" key={cert.id || i}>
                     <div className="cert-info">
                       <div className="cert-icon">
@@ -660,20 +655,45 @@ export default function Profile() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      className="download-btn"
-                      disabled={
-                        cert.status === "Pending" ||
-                        loadingCertCourseId === cert.courseId
-                      }
-                      onClick={() => handleDownloadCertificate(cert)}
-                    >
-                      {cert.status === "Downloaded"
-                        ? "Re-download"
-                        : "Download"}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {cert.status === 'Downloaded' ? (
+                        <>
+                          <button className="download-btn" onClick={() => handleViewCertificate(cert)}>
+                            {cert.showPreview ? 'Hide' : 'View'}
+                          </button>
+                          <button
+                            className="download-btn"
+                            onClick={() => handleDownloadCertificate(cert)}
+                            disabled={loadingCertCourseId === cert.courseId}
+                          >
+                            {loadingCertCourseId === cert.courseId ? 'Downloading...' : 'Download'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="download-btn"
+                          disabled={
+                            cert.status === 'Pending' || loadingCertCourseId === cert.courseId
+                          }
+                          onClick={() => handleDownloadCertificate(cert)}
+                        >
+                          {cert.status === 'Downloaded' ? 'Re-download' : 'Download'}
+                        </button>
+                      )}
+                    </div>
+                    {cert.showPreview && cert.previewUrl && (
+                      <div style={{ marginTop: 12 }}>
+                        <iframe
+                          src={cert.previewUrl}
+                          title={`Certificate-${cert.courseId}`}
+                          width="100%"
+                          height="400px"
+                        />
+                      </div>
+                    )}
                   </div>
-                ))}
+                ))
+              })()}
               </div>
             </div>
           </div>
