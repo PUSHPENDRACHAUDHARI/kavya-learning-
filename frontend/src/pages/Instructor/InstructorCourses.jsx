@@ -262,7 +262,7 @@ const InstructorCourses = () => {
             <option value="all">All levels</option>
             <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
-            <option value="Advance">Advance</option>
+            <option value="Advanced">Advanced</option>
           </select>
         </div>
 
@@ -289,7 +289,7 @@ const InstructorCourses = () => {
               <select name="level" value={formData.level} onChange={handleChange} className="form-control">
                 <option value="Beginner">Beginner</option>
                 <option value="Intermediate">Intermediate</option>
-                <option value="Advance">Advance</option>
+                <option value="Advanced">Advanced</option>
               </select>
               <textarea 
                 name="description" 
