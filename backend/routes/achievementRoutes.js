@@ -5,7 +5,8 @@ const {
     getMyAchievements,
     getRecentAchievements,
     getAchievementPoints,
-    getLeaderboard
+    getLeaderboard,
+    getMyRanking
 } = require('../controllers/achievementController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -15,6 +16,7 @@ router.route('/')
 router.get('/my-achievements', protect, getMyAchievements);
 router.get('/recent', protect, getRecentAchievements);
 router.get('/points', protect, getAchievementPoints);
+router.get('/my-ranking', protect, getMyRanking);
 router.get('/leaderboard', protect, getLeaderboard);
 
 module.exports = router;

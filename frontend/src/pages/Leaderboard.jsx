@@ -5,22 +5,15 @@ import {
   TrendingDown,
   Award,
   Star,
+  Zap,
+  Flame,
+  Target,
+  Clock,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../assets/leaderboard.css";
 import AppLayout from "../components/AppLayout";
-
-// we'll populate leaderboard from API
-
-const achievements = [
-  { icon: Crown, label: "Top Performer", color: "#fbbf24" },
-  { icon: TrendingUp, label: "Fast Learner", color: "#60a5fa" },
-  { icon: Award, label: "Consistent", color: "#4ade80" },
-  { icon: Star, label: "High Scorer", color: "#60a5fa" },
-];
-
-// ==========================================
 
 export default function Leaderboard() {
   const [activeTab, setActiveTab] = useState("Overall");
@@ -32,6 +25,21 @@ export default function Leaderboard() {
   const [achievementsHover, setAchievementsHover] = useState(false);
   const [challengeHover, setChallengeHover] = useState(false);
   const [motivationHover, setMotivationHover] = useState(false);
+
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [myRank, setMyRank] = useState(null);
+  const [myAchievements, setMyAchievements] = useState([]);
+  const [weeklyChallenges, setWeeklyChallenges] = useState({
+    coursesCompleted: 0,
+    coursesTarget: 5,
+    hoursStudied: 0,
+    hoursTarget: 10,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const navigate = useNavigate();
+  const token = localStorage.getItem("token");
 
   const interactiveStyle = {
     transition: "all 0.3s ease-in-out",
@@ -48,122 +56,177 @@ export default function Leaderboard() {
 
   const tabs = ["Overall", "This Month", "This Week", "My Courses"];
 
-  const navigate = useNavigate();
+  // Dynamic achievement badges based on user performance
+  const getAchievementBadges = (userData) => {
+    const badges = [];
 
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [myRank, setMyRank] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [weeklyChallenges, setWeeklyChallenges] = useState({
-    coursesCompleted: 0,
-    coursesTarget: 5,
-    hoursStudied: 0,
-    hoursTarget: 10
-  });
-
-  useEffect(() => {
-    async function loadLeaderboard() {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/achievements/leaderboard', {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: localStorage.getItem('token')
-              ? `Bearer ${localStorage.getItem('token')}`
-              : undefined,
-          },
-        });
-
-        if (!res.ok) {
-          console.warn('Failed to fetch leaderboard');
-          setLoading(false);
-          return;
-        }
-
-        const data = await res.json();
-        // API returns { leaderboard, myRank }
-        setLeaderboard(Array.isArray(data.leaderboard) ? data.leaderboard : []);
-        setMyRank(data.myRank || null);
-      } catch (err) {
-        console.error('Error loading leaderboard', err);
-      }
-      setLoading(false);
+    if (userData?.totalPoints > 500) {
+      badges.push({
+        icon: Crown,
+        label: "Top Performer",
+        color: "#fbbf24",
+      });
     }
 
-    async function loadWeeklyChallengeConfig() {
+    if (userData?.coursesCompleted >= 3) {
+      badges.push({
+        icon: TrendingUp,
+        label: "Fast Learner",
+        color: "#60a5fa",
+      });
+    }
+
+    if (userData?.streakDays >= 7) {
+      badges.push({
+        icon: Flame,
+        label: "Consistent",
+        color: "#ef4444",
+      });
+    }
+
+    if (userData?.averageScore >= 85) {
+      badges.push({
+        icon: Star,
+        label: "High Scorer",
+        color: "#fbbf24",
+      });
+    }
+
+    return badges;
+  };
+
+  // Fetch leaderboard data
+  useEffect(() => {
+    const loadLeaderboardData = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/challenges/weekly', {
+        // Fetch full leaderboard
+        const leaderboardRes = await fetch("/api/achievements/leaderboard", {
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: token ? `Bearer ${token}` : undefined,
           },
         });
 
-        if (!res.ok) return null;
-        const payload = await res.json();
-        return payload || null;
-      } catch (err) {
-        return null;
-      }
-    }
+        if (!leaderboardRes.ok) {
+          throw new Error("Failed to fetch leaderboard");
+        }
 
-    async function loadStudentProgress(challengeConfig) {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        const leaderboardData = await leaderboardRes.json();
+        setLeaderboard(
+          leaderboardData.leaderboard ? leaderboardData.leaderboard : []
+        );
 
-        const res = await fetch('/api/student/dashboard', {
+        // Fetch my ranking
+        const myRankRes = await fetch("/api/achievements/my-ranking", {
           headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : undefined,
           },
         });
 
-        if (!res.ok) return;
-        const data = await res.json();
-        const student = data.data || data;
+        if (myRankRes.ok) {
+          const myRankData = await myRankRes.json();
+          setMyRank(myRankData);
+        }
 
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-        const coursesCompleted = (student.enrolledCourses || []).filter(
-          (ec) => ec.completed && new Date(ec.completionDate) >= oneWeekAgo
-        ).length;
-
-        const hoursStudied = Math.round((student.totalHoursLearned || 0));
-
-        setWeeklyChallenges({
-          coursesCompleted,
-          coursesTarget: (challengeConfig && challengeConfig.coursesTarget) || 5,
-          hoursStudied,
-          hoursTarget: (challengeConfig && challengeConfig.hoursTarget) || 10,
-          startDate: challengeConfig?.startDate,
-          endDate: challengeConfig?.endDate,
+        // Fetch my achievements
+        const achievementsRes = await fetch("/api/achievements/my-achievements", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : undefined,
+          },
         });
+
+        if (achievementsRes.ok) {
+          const achievementsData = await achievementsRes.json();
+          setMyAchievements(Array.isArray(achievementsData) ? achievementsData : []);
+        }
+
+        // Load weekly challenges and progress
+        await loadWeeklyChallenges();
       } catch (err) {
-        console.error('Error loading student progress', err);
+        console.error("Error loading leaderboard:", err);
+        setError(err.message);
       }
-    }
-
-    (async () => {
-      const cfg = await loadWeeklyChallengeConfig();
-      await loadStudentProgress(cfg);
-      await loadLeaderboard();
-    })();
-  }, []);
-
-  const renderLeaderboardContent = () => {
-    const streakAchievement = achievements.find(
-      (a) => a.label === "Consistent"
-    ) || {
-      icon: Award,
-      color: "#fbbf24",
+      setLoading(false);
     };
 
-    const StreakIcon = streakAchievement.icon;
-    const streakColor = streakAchievement.color;
+    const loadWeeklyChallenges = async () => {
+      try {
+        // Fetch student dashboard for hours studied
+        const dashboardRes = await fetch("/api/student/dashboard", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : undefined,
+          },
+        });
+
+        if (dashboardRes.ok) {
+          const dashboardData = await dashboardRes.json();
+          const overview = dashboardData.data?.overview || dashboardData.overview;
+
+          setWeeklyChallenges((prev) => ({
+            ...prev,
+            coursesCompleted: overview?.completedCourses || 0,
+            hoursStudied: overview?.totalStudyHours || 0,
+          }));
+        }
+      } catch (err) {
+        console.error("Error loading weekly challenges:", err);
+      }
+    };
+
+    if (token) {
+      loadLeaderboardData();
+      
+      // Set up auto-refresh every 30 seconds
+      const refreshInterval = setInterval(loadLeaderboardData, 30000);
+      return () => clearInterval(refreshInterval);
+    }
+  }, [token]);
+
+  const getRankColor = (rank) => {
+    switch (rank) {
+      case 1:
+        return "#1e3a5f";
+      case 2:
+        return "#3b6ea5";
+      case 3:
+        return "#4ca89a";
+      default:
+        return "#3b6ea5";
+    }
+  };
+
+  const getRankLabel = (rank) => {
+    if (rank === 1) return "1st";
+    if (rank === 2) return "2nd";
+    if (rank === 3) return "3rd";
+    return `${rank}th`;
+  };
+
+  const renderLeaderboardContent = () => {
+    if (loading) {
+      return (
+        <div style={{ textAlign: "center", padding: "40px" }}>
+          <p>Loading leaderboard data...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div style={{ textAlign: "center", padding: "40px", color: "red" }}>
+          <p>Error: {error}</p>
+        </div>
+      );
+    }
 
     if (activeTab === "Overall") {
+      const userAchievementBadges = myRank ? getAchievementBadges(myRank) : [];
+
       return (
         <div className="content-grid">
           <div className="left-column">
@@ -180,32 +243,22 @@ export default function Leaderboard() {
               <h2 className="section-title">Top Performers</h2>
 
               <div className="podium">
-                {leaderboard.slice(0, 3).map((item, idx) => {
-                  const performer = {
-                    rank: idx + 1,
-                    name: item._id?.name || 'Unknown',
-                    points: item.totalPoints || 0,
-                    initials: (item._id?.name || 'U')
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .slice(0, 2)
-                      .toUpperCase(),
-                    color: ['#1e3a5f', '#3b6ea5', '#4ca89a'][idx] || '#3b6ea5'
-                  };
+                {leaderboard.slice(0, 3).map((item) => {
+                  const color = getRankColor(item.rank);
+                  const label = getRankLabel(item.rank);
 
                   return (
                     <div
-                      key={performer.rank}
-                      className={`podium-item podium-rank-${performer.rank}`}
-                      onClick={() => navigate('/profile', { state: { user: item._id } })}
-                      style={{ cursor: 'pointer' }}
+                      key={item.rank}
+                      className={`podium-item podium-rank-${item.rank}`}
+                      onClick={() => navigate("/profile", { state: { user: item.userId } })}
+                      style={{ cursor: "pointer" }}
                     >
                       <div
                         className="podium-avatar"
-                        style={{ backgroundColor: performer.color }}
+                        style={{ backgroundColor: color }}
                       >
-                        {performer.rank === 1 && (
+                        {item.rank === 1 && (
                           <Crown
                             className="crown-icon"
                             size={24}
@@ -214,23 +267,19 @@ export default function Leaderboard() {
                         )}
                         <span
                           className={`rank-number ${
-                            performer.rank === 1 ? "rank-number-1st" : ""
+                            item.rank === 1 ? "rank-number-1st" : ""
                           }`}
                         >
-                          {performer.rank === 1
-                            ? "1st"
-                            : performer.rank === 2
-                            ? "2nd"
-                            : "3rd"}
+                          {label}
                         </span>
                       </div>
 
-                      <div className="podium-name">{performer.name}</div>
-                      <div className="podium-points">{performer.points} pts</div>
+                      <div className="podium-name">{item.name}</div>
+                      <div className="podium-points">{item.totalPoints} pts</div>
 
                       <div
                         className="podium-bar"
-                        style={{ backgroundColor: performer.color }}
+                        style={{ backgroundColor: color }}
                       ></div>
                     </div>
                   );
@@ -251,83 +300,61 @@ export default function Leaderboard() {
               <h2 className="section-title">Full Rankings</h2>
 
               <div className="rankings-list">
-                {leaderboard.map((item, index) => {
-                  const name = item._id?.name || 'Unknown';
-                  const initials = name
-                    .split(' ')
+                {leaderboard.map((item) => {
+                  const initials = item.name
+                    .split(" ")
                     .map((n) => n[0])
-                    .join('')
+                    .join("")
                     .slice(0, 2)
                     .toUpperCase();
 
-                  const userRow = {
-                    rank: index + 1,
-                    name,
-                    initials,
-                    points: item.totalPoints || 0,
-                    courses: 0,
-                    avg: 0,
-                    streak: 0,
-                    trend: 'up'
-                  };
-
                   return (
                     <div
-                      key={index}
+                      key={item.userId}
                       className={`ranking-item ${
-                        selectedRank === userRow.rank ? "ranking-selected" : ""
+                        selectedRank === item.rank ? "ranking-selected" : ""
                       }`}
                       style={
-                        selectedRank === userRow.rank
+                        selectedRank === item.rank
                           ? { border: "1px solid black" }
                           : {}
                       }
                       onClick={() => {
-                        setSelectedRank(userRow.rank);
-                        navigate('/profile', { state: { user: item._id } });
+                        setSelectedRank(item.rank);
+                        navigate("/profile", { state: { user: item.userId } });
                       }}
                     >
-                      <div className="ranking-rank">{userRow.rank}</div>
+                      <div className="ranking-rank">{item.rank}</div>
 
                       <div
                         className="ranking-avatar"
                         style={{
-                          backgroundColor:
-                            userRow.rank === 1
-                              ? "#1e3a5f"
-                              : userRow.rank === 2
-                              ? "#3b6ea5"
-                              : userRow.rank === 3
-                              ? "#4ca89a"
-                              : "#3b6ea5",
+                          backgroundColor: getRankColor(item.rank),
                         }}
                       >
-                        {userRow.initials}
+                        {initials}
                       </div>
 
                       <div className="ranking-info">
-                        <div className="ranking-name">{userRow.name}</div>
+                        <div className="ranking-name">{item.name}</div>
 
                         <div className="ranking-stats">
-                          {userRow.courses} courses · {userRow.avg}% avg ·{' '}
-                          <StreakIcon size={14} style={{ color: streakColor }} />{' '}
-                          {userRow.streak} day streak
+                          {item.coursesCompleted || 0} courses ·{" "}
+                          {item.averageScore || 0}% avg ·
+                          <Flame
+                            size={14}
+                            style={{ color: "#ef4444", marginLeft: "4px" }}
+                          />{" "}
+                          {item.streakDays || 0} day streak
                         </div>
                       </div>
 
-                      <div className="ranking-points">{userRow.points}</div>
+                      <div className="ranking-points">{item.totalPoints} pts</div>
 
-                      {userRow.trend === "up" ? (
-                        <TrendingUp
-                          className="ranking-trend trend-up"
-                          size={20}
-                        />
-                      ) : (
-                        <TrendingDown
-                          className="ranking-trend trend-down"
-                          size={20}
-                        />
-                      )}
+                      <TrendingUp
+                        className="ranking-trend trend-up"
+                        size={20}
+                      />
                     </div>
                   );
                 })}
@@ -353,24 +380,34 @@ export default function Leaderboard() {
               </div>
 
               <div className="your-ranking-badge">
-                <div className="ranking-circle">{myRank ? myRank.rank : '-'}</div>
+                <div className="ranking-circle">
+                  {myRank?.rank || "-"}
+                </div>
               </div>
 
-              <div className="your-ranking-points">{myRank ? myRank.totalPoints : '-'}</div>
+              <div className="your-ranking-points">
+                {myRank?.totalPoints || 0}
+              </div>
               <div className="your-ranking-label">Total Points</div>
 
               <div className="your-ranking-stats">
                 <div className="stat-row">
                   <span>Courses Completed</span>
-                  <span className="stat-value">{myRank?.coursesCompleted ?? '-'}</span>
+                  <span className="stat-value">
+                    {myRank?.coursesCompleted || 0}
+                  </span>
                 </div>
                 <div className="stat-row">
                   <span>Average Score</span>
-                  <span className="stat-value">{myRank?.avgScore ? myRank.avgScore + '%' : '-'}</span>
+                  <span className="stat-value">
+                    {myRank?.avgScore || 0}%
+                  </span>
                 </div>
                 <div className="stat-row">
                   <span>Current Streak</span>
-                  <span className="stat-value">{myRank?.streak ? myRank.streak + ' days' : '-'}</span>
+                  <span className="stat-value">
+                    {myRank?.streakDays || 0} days
+                  </span>
                 </div>
               </div>
             </div>
@@ -388,16 +425,35 @@ export default function Leaderboard() {
               <h3 className="section-title mb-5">Your Achievements</h3>
 
               <div className="achievements-list">
-                {achievements.map((achievement, index) => (
-                  <div key={index} className="achievement-item">
-                    <achievement.icon
-                      className="achievement-icon"
-                      size={20}
-                      style={{ color: achievement.color }}
-                    />
-                    <span>{achievement.label}</span>
+                {userAchievementBadges.length > 0 ? (
+                  userAchievementBadges.map((achievement, index) => (
+                    <div key={index} className="achievement-item">
+                      <achievement.icon
+                        className="achievement-icon"
+                        size={20}
+                        style={{ color: achievement.color }}
+                      />
+                      <span>{achievement.label}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color: "#999", fontSize: "14px" }}>
+                    Complete courses and earn points to unlock achievements!
                   </div>
-                ))}
+                )}
+
+                {myAchievements.length > 0 && (
+                  <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #eee" }}>
+                    <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
+                      Recent Achievements ({myAchievements.length})
+                    </div>
+                    {myAchievements.slice(0, 3).map((achievement) => (
+                      <div key={achievement._id} style={{ fontSize: "13px", marginBottom: "8px" }}>
+                        <Award size={14} style={{ color: "#4ade80" }} /> {achievement.title}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -412,15 +468,12 @@ export default function Leaderboard() {
               onMouseLeave={() => setChallengeHover(false)}
             >
               <h3 className="section-title">Weekly Challenge</h3>
-              {weeklyChallenges?.startDate && weeklyChallenges?.endDate && (
-                <div className="challenge-dates">
-                  {new Date(weeklyChallenges.startDate).toLocaleDateString()} - {new Date(weeklyChallenges.endDate).toLocaleDateString()}
-                </div>
-              )}
 
               <div className="challenge-item">
                 <div className="challenge-label-row">
-                  <div>Complete {weeklyChallenges.coursesTarget} Courses</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <Target size={16} /> Complete {weeklyChallenges.coursesTarget} Courses
+                  </div>
                   <div className="challenge-progress-value">
                     {weeklyChallenges.coursesCompleted}/{weeklyChallenges.coursesTarget}
                   </div>
@@ -429,9 +482,14 @@ export default function Leaderboard() {
                 <div className="challenge-progress-bar">
                   <div
                     className="challenge-progress-fill"
-                    style={{ 
-                      width: `${Math.min((weeklyChallenges.coursesCompleted / weeklyChallenges.coursesTarget) * 100, 100)}%`, 
-                      backgroundColor: "#4ade80" 
+                    style={{
+                      width: `${Math.min(
+                        (weeklyChallenges.coursesCompleted /
+                          weeklyChallenges.coursesTarget) *
+                          100,
+                        100
+                      )}%`,
+                      backgroundColor: "#4ade80",
                     }}
                   ></div>
                 </div>
@@ -439,7 +497,9 @@ export default function Leaderboard() {
 
               <div className="challenge-item">
                 <div className="challenge-label-row">
-                  <div>Study {weeklyChallenges.hoursTarget} Hours</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <Clock size={16} /> Study {weeklyChallenges.hoursTarget} Hours
+                  </div>
                   <div className="challenge-progress-value">
                     {weeklyChallenges.hoursStudied}/{weeklyChallenges.hoursTarget}
                   </div>
@@ -448,32 +508,39 @@ export default function Leaderboard() {
                 <div className="challenge-progress-bar">
                   <div
                     className="challenge-progress-fill"
-                    style={{ 
-                      width: `${Math.min((weeklyChallenges.hoursStudied / weeklyChallenges.hoursTarget) * 100, 100)}%`, 
-                      backgroundColor: "#3b82f6" 
+                    style={{
+                      width: `${Math.min(
+                        (weeklyChallenges.hoursStudied /
+                          weeklyChallenges.hoursTarget) *
+                          100,
+                        100
+                      )}%`,
+                      backgroundColor: "#3b82f6",
                     }}
                   ></div>
                 </div>
               </div>
             </div>
 
-            {/* Motivation */}
-            <div
-              className="motivation-card"
-              style={{
-                ...interactiveStyle,
-                ...(motivationHover ? hoverEffect : {}),
-              }}
-              onMouseEnter={() => setMotivationHover(true)}
-              onMouseLeave={() => setMotivationHover(false)}
-            >
-              <Star className="motivation-icon" size={24} />
-              <h4 className="motivation-title">Keep Going!</h4>
-              <p className="motivation-text">
-                You're just 50 points away from overtaking the 2nd position.
-                Keep up the great work!
-              </p>
-            </div>
+            {/* Motivation Card */}
+            {myRank?.rank && myRank.rank > 1 && (
+              <div
+                className="motivation-card"
+                style={{
+                  ...interactiveStyle,
+                  ...(motivationHover ? hoverEffect : {}),
+                }}
+                onMouseEnter={() => setMotivationHover(true)}
+                onMouseLeave={() => setMotivationHover(false)}
+              >
+                <Star className="motivation-icon" size={24} />
+                <h4 className="motivation-title">Keep Going!</h4>
+                <p className="motivation-text">
+                  You're at rank #{myRank.rank}. Keep earning points and
+                  completing courses to move up the leaderboard!
+                </p>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -535,3 +602,4 @@ export default function Leaderboard() {
     </AppLayout>
   );
 }
+

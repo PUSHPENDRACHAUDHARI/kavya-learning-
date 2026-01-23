@@ -2603,7 +2603,7 @@ export default function Courses() {
             <h2 className="hero-title mb-3">{enrolledCourseTitle}</h2>
             <p className="hero-desc mb-4">
               {" "}
-              A comprehensive course designed to turn beginners into professional ethical hackers. Learn how to secure systems and perform real-world penetration testing using industry-standard tools and techniques.
+              
               {" "}
             </p>
             {
