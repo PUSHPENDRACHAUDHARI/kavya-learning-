@@ -185,7 +185,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess, course }) => {
         <select id="level" name="level" value={formData.level} onChange={handleChange} className="form-control">
           <option value="Beginner">Beginner</option>
           <option value="Intermediate">Intermediate</option>
-          <option value="Advanced">Advance</option>
+          <option value="Advanced">Advanced</option>
         </select>
       </div>
       <div>
