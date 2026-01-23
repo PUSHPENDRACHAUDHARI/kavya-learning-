@@ -16,7 +16,7 @@ exports.getStudentDashboard = async (req, res) => {
       .populate({
         path: 'enrolledCourses.course',
         select: 'title thumbnail instructor level duration',
-        populate: { path: 'instructor', select: 'fullName' }
+        populate: { path: 'instructor', select: 'fullName bio title role' }
       })
       .populate('achievements');
        
@@ -216,7 +216,7 @@ exports.getStudentCourses = async (req, res) => {
         path: 'enrolledCourses.course',
         populate: { 
           path: 'instructor lessons',
-          select: 'fullName title',
+          select: 'fullName title bio role email',
           options: { limit: 1 }
         }
       });
@@ -281,7 +281,7 @@ exports.getStudentCourse = async (req, res) => {
 
     if (!enrollment) return res.status(403).json({ message: 'Not enrolled in this course' });
 
-    const course = await Course.findById(courseId).populate('instructor', 'fullName email').populate('lessons');
+    const course = await Course.findById(courseId).populate('instructor', 'fullName email bio title role').populate('lessons');
 
     const isFree = enrollment.isFree === true || (enrollment.purchaseStatus && String(enrollment.purchaseStatus).toLowerCase() === 'free');
     const hasPayment = !!enrollment.paymentId || (enrollment.purchaseStatus && String(enrollment.purchaseStatus).toLowerCase() === 'paid');

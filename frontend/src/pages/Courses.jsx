@@ -3298,10 +3298,11 @@ export default function Courses() {
                   </div>
                   <div>
                     <h5>{courseInstructor.name}</h5>
+                    {courseInstructor.title && (
+                      <p className="mb-2" style={{ fontSize: '0.95rem', fontWeight: '500', color: '#2B6CB0' }}>{courseInstructor.title}</p>
+                    )}
                     {courseInstructor.description ? (
-                      <p className="mb-3">{courseInstructor.description}</p>
-                    ) : courseInstructor.title ? (
-                      <p className="mb-3">{courseInstructor.title}</p>
+                      <p className="mb-3" style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#4a5568' }}>{courseInstructor.description}</p>
                     ) : null}
                     <div className="d-flex gap-4 small muted">
                       <div>
@@ -3311,10 +3312,6 @@ export default function Courses() {
                       <div>
                         <i className="bi bi-journal-check me-1"></i>
                         {courseInstructor.stats.courses} Courses
-                      </div>
-                      <div>
-                        <i className="bi bi-star me-1"></i>
-                        {courseInstructor.stats.rating} Rating
                       </div>
                     </div>
                   </div>
@@ -3331,7 +3328,14 @@ export default function Courses() {
                   </div>
                   <div>
                     <h5>{inst.name}</h5>
-                    <p className="mb-3">{inst.title}</p>
+                    {inst.title && (
+                      <p className="mb-2" style={{ fontSize: '0.95rem', fontWeight: '500', color: '#2B6CB0' }}>{inst.title}</p>
+                    )}
+                    {inst.description ? (
+                      <p className="mb-3" style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#4a5568' }}>{inst.description}</p>
+                    ) : inst.title ? (
+                      <p className="mb-3" style={{ fontSize: '0.95rem', lineHeight: '1.5', color: '#4a5568' }}>{inst.title}</p>
+                    ) : null}
                     <div className="d-flex gap-4 small muted">
                       <div>
                         <i className="bi bi-people me-1"></i>
@@ -3340,10 +3344,6 @@ export default function Courses() {
                       <div>
                         <i className="bi bi-journal-check me-1"></i>
                         {inst.stats.courses} Courses
-                      </div>
-                      <div>
-                        <i className="bi bi-star me-1"></i>
-                        {inst.stats.rating} Rating
                       </div>
                     </div>
                   </div>

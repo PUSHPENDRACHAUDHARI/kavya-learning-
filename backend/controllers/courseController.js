@@ -53,7 +53,7 @@ exports.getCourses = async (req, res) => {
 
         const count = await Course.countDocuments({ ...keyword });
         const courses = await Course.find({ ...keyword })
-            .populate('instructor', 'fullName email')
+            .populate('instructor', 'fullName email bio title role')
             .limit(pageSize)
             .skip(pageSize * (page - 1))
             .sort('-createdAt');
@@ -75,7 +75,7 @@ exports.getCourses = async (req, res) => {
 exports.getCourseById = async (req, res) => {
     try {
         const course = await Course.findById(req.params.id)
-            .populate('instructor', 'fullName email')
+            .populate('instructor', 'fullName email bio title role')
             .populate('lessons')
             .populate('reviews.user', 'fullName avatar');
 
