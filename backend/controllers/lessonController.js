@@ -107,7 +107,7 @@ exports.updateLesson = async (req, res) => {
 
         // Check authorization
         const course = await Course.findById(lesson.course);
-        if (course.instructor.toString() !== req.user._id.toString()) {
+        if (course.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin' && req.user.role !== 'sub-admin') {
             return res.status(403).json({ message: 'Not authorized to update this lesson' });
         }
 
@@ -130,7 +130,7 @@ exports.deleteLesson = async (req, res) => {
 
         // Check authorization
         const course = await Course.findById(lesson.course);
-        if (course.instructor.toString() !== req.user._id.toString()) {
+        if (course.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin' && req.user.role !== 'sub-admin') {
             return res.status(403).json({ message: 'Not authorized to delete this lesson' });
         }
 
