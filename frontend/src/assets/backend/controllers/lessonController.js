@@ -14,9 +14,11 @@ exports.createLesson = async (req, res) => {
             return res.status(404).json({ message: 'Course not found' });
         }
 
-        // Verify user is the instructor of this course
-        if (course.instructor.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized to add lessons to this course' });
+        // Verify user is the instructor of this course, unless admin/sub-admin
+        if (!(req.user && (req.user.role === 'admin' || req.user.role === 'sub-admin'))) {
+            if (course.instructor.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: 'Not authorized to add lessons to this course' });
+            }
         }
 
         // Ensure numeric duration (accept '45' or '45 min') and compute order if missing
@@ -105,10 +107,12 @@ exports.updateLesson = async (req, res) => {
             return res.status(404).json({ message: 'Lesson not found' });
         }
 
-        // Check authorization
+        // Check authorization: allow admin/sub-admin to update any lesson
         const course = await Course.findById(lesson.course);
-        if (course.instructor.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized to update this lesson' });
+        if (!(req.user && (req.user.role === 'admin' || req.user.role === 'sub-admin'))) {
+            if (course.instructor.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: 'Not authorized to update this lesson' });
+            }
         }
 
         lesson = await Lesson.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
@@ -128,10 +132,12 @@ exports.deleteLesson = async (req, res) => {
             return res.status(404).json({ message: 'Lesson not found' });
         }
 
-        // Check authorization
+        // Check authorization: allow admin/sub-admin to delete any lesson
         const course = await Course.findById(lesson.course);
-        if (course.instructor.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ message: 'Not authorized to delete this lesson' });
+        if (!(req.user && (req.user.role === 'admin' || req.user.role === 'sub-admin'))) {
+            if (course.instructor.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: 'Not authorized to delete this lesson' });
+            }
         }
 
         // Remove lesson from course

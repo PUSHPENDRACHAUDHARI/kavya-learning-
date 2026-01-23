@@ -1394,6 +1394,7 @@ export default function Courses() {
   // When a course has backend lessons, we will populate this and prefer it
   // over the static demo arrays above.
   const [courseLessons, setCourseLessons] = useState([]);
+  const [courseLoaded, setCourseLoaded] = useState(false);
 
   // Course metadata (defaults to 0 when not available)
   const [enrolledCount, setEnrolledCount] = useState(0);
@@ -1725,14 +1726,29 @@ export default function Courses() {
           if (!persistedEnrolled) {
             if (active) setEnrolled(false);
           }
-          // Mark server progress as loaded (no enrollment found -> 0%) so UI shows 0 until user takes action
-          try { setServerProgressLoaded(true); setServerProgressValue(0); } catch (e) {}
+          // If we have a locally persisted course completion date (per-user or guest),
+          // trust that and show 100% progress even when backend could not be reached.
+          let completionFound = false;
+          try {
+            const guestKey = getCompletionStorageKey(null, courseId);
+            if (guestKey && window.localStorage.getItem(guestKey)) completionFound = true;
+            if (!completionFound) {
+              const profileKey = getCompletionStorageKey(userProfile, courseId);
+              if (profileKey && window.localStorage.getItem(profileKey)) completionFound = true;
+            }
+          } catch (err) {
+            // ignore read errors
+          }
+          // Mark server progress as loaded and prefer the local completion if present
+          try { setServerProgressLoaded(true); setServerProgressValue(completionFound ? 100 : 0); } catch (e) {}
         }
       } catch (err) {
         console.warn('Could not verify enrollment status:', err);
         // On error, default to not enrolled
         if (active) setEnrolled(false);
       }
+      // mark that we've attempted to load the course (even if it had no lessons)
+      try { if (active) setCourseLoaded(true); } catch (e) {}
     })();
     return () => { active = false; };
   }, [location.search]);
@@ -2283,12 +2299,14 @@ export default function Courses() {
   // Compute course progress based on watched lessons
   // If not enrolled, progress should always be 0%
   // Prefer backend-provided lessons when available; otherwise fall back to demo arrays
-  const totalLessons = (courseLessons && courseLessons.length)
-    ? courseLessons.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0)
-    : gettingStarted.length + coreConcepts.length + practicalApplications.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0);
+  const totalLessons = (courseLoaded)
+    ? (courseLessons.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0))
+    : ((courseLessons && courseLessons.length)
+      ? courseLessons.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0)
+      : gettingStarted.length + coreConcepts.length + practicalApplications.length + (newModules ? newModules.reduce((s, m) => s + (m.lessons ? m.lessons.length : 0), 0) : 0));
   // Helper: Get all lessons in order across modules (for sequential unlocking)
   // Prefer backend lessons if present; otherwise use demo modules + newModules
-  const allLessonsInOrder = (courseLessons && courseLessons.length)
+  const allLessonsInOrder = (courseLoaded || (courseLessons && courseLessons.length))
     ? [...courseLessons, ...(newModules ? newModules.flatMap(m => m.lessons || []) : [])]
     : [
         ...gettingStarted,
@@ -2318,7 +2336,22 @@ export default function Courses() {
   } else if (serverProgressValue !== null) {
     // Prefer server-provided progress when available
     // Ensure server value is clamped between 0 and 100
-    progressPercent = Math.max(0, Math.min(100, Number(serverProgressValue) || 0));
+    const serverVal = Math.max(0, Math.min(100, Number(serverProgressValue) || 0));
+    // If locally we know the user completed all lessons (watchedCount === totalLessons)
+    // or we have a persisted completion date, prefer showing 100% so the progress bar
+    // matches the "X of Y lessons completed" indicator even if backend reports 0.
+    let localComplete = false;
+    try {
+      if (totalLessons > 0 && watchedCount === totalLessons) localComplete = true;
+      if (!localComplete) {
+        const keyUser = getCompletionStorageKey(userProfile, currentCourseId);
+        const keyGuest = getCompletionStorageKey(null, currentCourseId);
+        if ((keyUser && window.localStorage.getItem(keyUser)) || (keyGuest && window.localStorage.getItem(keyGuest))) localComplete = true;
+      }
+    } catch (err) {
+      // ignore localStorage errors
+    }
+    progressPercent = localComplete ? 100 : serverVal;
   } else {
     if (totalLessons > 0) {
       const lessonWeight = 100 / totalLessons;
@@ -2542,7 +2575,7 @@ export default function Courses() {
               return (
                 <button
                   type="button"
-                  className={lesson.actionClass}
+                  className={"lesson-action"}
                   disabled={isLocked}
                   onClick={(e) => {
                     e.preventDefault();
@@ -2958,6 +2991,20 @@ export default function Courses() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ) : courseLoaded ? (
+                  // Course was loaded but no lessons exist -> show empty state
+                  <div className="curriculum-panel rounded-3 overflow-hidden mb-3">
+                    <div className="curriculum-header d-flex justify-content-between align-items-center p-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="bi bi-folder-plus header-icon"></i>
+                        <strong>Curriculum</strong>
+                      </div>
+                      <div className="muted small">
+                        <i className="bi bi-clock me-1"></i> 0 lessons
+                      </div>
+                    </div>
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>No lessons added yet in this course.</div>
                   </div>
                 ) : (
                   // Fallback: demo modules when backend lessons not available

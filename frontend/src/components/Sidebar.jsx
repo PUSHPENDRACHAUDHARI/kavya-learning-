@@ -10,7 +10,7 @@ import {
   LuGalleryHorizontalEnd,
 } from "react-icons/lu";
 import { TbReportAnalytics } from "react-icons/tb";
-import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement, MdSettings } from "react-icons/md";
+import { MdSchool, MdMessage, MdCreditCard, MdAnnouncement, MdSettings, MdPeople, MdPerson } from "react-icons/md";
 import { MdAutoStories } from "react-icons/md";
 import { AiOutlineBook } from "react-icons/ai";
 import logo from "../assets/logo.png";
@@ -110,8 +110,9 @@ function Sidebar({ isOpen, setIsOpen }) {
       ...(userRole === 'admin' || userRole === 'sub-admin' ? [
       { path: "/admin/dashboard", label: "Admin Dashboard", icon: <TbReportAnalytics /> },
       { path: "/admin/announcements", label: "Announcements", icon: <MdAnnouncement /> },
-      { path: "/admin/students", label: "Manage Students", icon: <LuUser /> },
-      { path: "/admin/parents", label: "Manage Parents", icon: <MdSchool /> },
+      { path: "/admin/lessons", label: "Manage Lessons", icon: <MdAutoStories /> },
+      { path: "/admin/students", label: "Manage Students", icon: <MdPerson /> },
+      { path: "/admin/parents", label: "Manage Parents", icon: <MdPeople /> },
       { path: "/admin/instructors", label: "Manage Instructors", icon: <MdSchool /> },
       { path: "/admin/courses", label: "Manage Courses", icon: <AiOutlineBook /> },
       { path: "/admin/notes", label: "Notes", icon: <LuGalleryHorizontalEnd /> },
