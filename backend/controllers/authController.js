@@ -116,13 +116,13 @@ exports.registerUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
-        // Special-case: single admin credential
+        // Special-case: admin login should authenticate against the stored admin record
+        // If an admin user record exists, use its stored password (so password resets apply).
+        // Only if no admin record exists do we allow the legacy hardcoded ADMIN_PASSWORD to work and create the record.
         let user;
         if (email && email.toLowerCase() === ADMIN_EMAIL) {
-            // Only accept the configured ADMIN_PASSWORD for the admin login
-            if (password !== ADMIN_PASSWORD) {
-                return res.status(401).json({ message: 'Invalid email or password' });
-            }
+            // Attempt to find an existing admin record
+            user = await User.findOne({ email: ADMIN_EMAIL }).select('+password +role');
 
             // Demote any other admin accounts to student so only one admin remains
             try {
@@ -132,23 +132,22 @@ exports.loginUser = async (req, res) => {
                 console.warn('Failed to demote other admins:', e.message);
             }
 
-            // Ensure an admin user record exists for compatibility with other code
-            user = await User.findOne({ email: ADMIN_EMAIL }).select('+password +role');
             if (!user) {
+                // No stored admin record: allow legacy ADMIN_PASSWORD to create the admin account
+                if (password !== ADMIN_PASSWORD) {
+                    return res.status(401).json({ message: 'Invalid email or password' });
+                }
                 user = await User.create({ fullName: 'Administrator', email: ADMIN_EMAIL, password: ADMIN_PASSWORD, role: 'admin' });
-            } else {
-                // Ensure role and password match the single-admin policy
-                user.role = 'admin';
-                user.password = ADMIN_PASSWORD; // will be hashed on save
-                await user.save();
             }
+            // If user exists, we'll validate password below using the normal matchPassword flow
         } else {
             // Regular user login flow
             user = await User.findOne({ email }).select('+password +role');
         }
 
         // Check if user exists and password matches (for non-admin we use matchPassword)
-        if (user && (email && email.toLowerCase() === ADMIN_EMAIL ? true : await user.matchPassword(password))) {
+        // Authenticate using the user's stored password (matchPassword) so reset flows apply for admins
+        if (user && await user.matchPassword(password)) {
             // Deny login for blocked users
             if (user.user_status === 'Blocked') {
                 return res.status(403).json({ message: 'Your account has been blocked by the administrator.' });

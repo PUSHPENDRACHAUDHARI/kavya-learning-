@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axiosClient from '../api/axiosClient';
 import DurationPicker from './DurationPicker';
 
-const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
+const CreateCourseModal = ({ isOpen, onClose, onSuccess, course }) => {
   const [formData, setFormData] = useState({ 
     title: '', 
     description: '', 
@@ -42,6 +42,23 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  // Initialize form when editing existing course
+  useEffect(() => {
+    if (course) {
+      setFormData({
+        title: course.title || '',
+        description: course.description || '',
+        category: course.category || '',
+        level: course.level || 'Beginner',
+        duration: course.duration || '',
+        price: course.price ?? 0,
+        status: course.status || 'active',
+        resourceUrl: course.resourceUrl || course.pdfResource || '',
+        resourceName: course.resourceName || ''
+      });
+    }
+  }, [course]);
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -73,11 +90,17 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess }) => {
     }
     
     try {
-      // Create course first
-      const createRes = await axiosClient.post('/api/admin/courses', formData);
-      const created = createRes.data;
-      // created may be the course object or { data: course }
-      const course = created && created._id ? created : (created.data || created);
+      let courseResponse;
+      if (course && course._id) {
+        // update existing
+        courseResponse = await axiosClient.put(`/api/admin/courses/${course._id}`, formData);
+      } else {
+        // Create course first
+        const createRes = await axiosClient.post('/api/admin/courses', formData);
+        courseResponse = createRes.data;
+      }
+      const created = courseResponse;
+      const createdCourse = created && created._id ? created : (created.data || created);
 
       // If an image was selected, upload it to the server and attach as thumbnail
       if (selectedImage && course && course._id) {

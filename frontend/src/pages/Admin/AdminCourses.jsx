@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FaEdit, FaTrash, FaBook } from 'react-icons/fa';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
 import CreateCourseModal from '../../components/CreateCourseModal';
@@ -9,6 +11,7 @@ const AdminCourses = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   // Search state
   const [titleQuery, setTitleQuery] = useState('');
@@ -102,21 +105,23 @@ const AdminCourses = () => {
           </div>
           <CreateCourseModal
             isOpen={true}
-            onClose={() => setShowForm(false)}
+            course={editingCourse}
+            onClose={() => { setShowForm(false); setEditingCourse(null); }}
             onSuccess={() => {
               loadCourses();
               setShowForm(false);
+              setEditingCourse(null);
             }}
           />
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 className="admin-heading">Courses</h2>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Hide Form" : "Add Course"}
-        </button>
-      </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <h1 style={{ fontSize: 36, margin: 0 }}>Courses</h1>
+            <button className="btn btn-primary" onClick={() => setShowForm(!showForm)} style={{ padding: '12px 20px', borderRadius: 8 }}>
+              {showForm ? "Hide Form" : "Add Course"}
+            </button>
+          </div>
       {/* Search controls */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
         <input
@@ -135,14 +140,15 @@ const AdminCourses = () => {
         </select>
       </div>
 
-      <table className="table">
+      <table className="table table-borderless" style={{ width: '100%' }}>
         <thead>
           <tr>
             <th>Title</th>
             <th>Category</th>
             <th>Level</th>
-            <th>Status</th>
-            <th>Duration (hrs)</th>
+            <th>Price</th>
+            <th>Students</th>
+            <th>Lessons</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -152,25 +158,18 @@ const AdminCourses = () => {
               <td>{c.title}</td>
               <td>{c.category}</td>
               <td>{c.level}</td>
-              <td>{c.status}</td>
-              <td>{c.durationHours}</td>
-              <td>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => handleDeleteCourse(c._id, c.title)}
-                  disabled={deleting === c._id}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: '14px',
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: deleting === c._id ? 'not-allowed' : 'pointer',
-                    opacity: deleting === c._id ? 0.6 : 1
-                  }}
-                >
-                  {deleting === c._id ? 'Deleting...' : 'Delete'}
+              <td>{typeof c.price !== 'undefined' ? (c.price === 0 ? 'Free' : `₹${c.price}`) : (c.amount ? `₹${c.amount}` : '—')}</td>
+              <td>{(c.enrolledStudents && Array.isArray(c.enrolledStudents)) ? c.enrolledStudents.length : (c.enrolledCount || 0)}</td>
+              <td>{(c.lessons && Array.isArray(c.lessons)) ? c.lessons.length : (c.lessonsCount || 0)}</td>
+              <td style={{ display: 'flex', gap: 8 }}>
+                <button title="Edit" className="btn btn-light" onClick={() => { setEditingCourse(c); setShowForm(true); }}>
+                  <FaEdit />
+                </button>
+                <button title="Lessons" className="btn btn-light" onClick={() => { navigate(`/admin/lessons?courseId=${c._id}`); }}>
+                  <FaBook />
+                </button>
+                <button title="Delete" className="btn btn-danger" onClick={() => handleDeleteCourse(c._id, c.title)} disabled={deleting === c._id}>
+                  <FaTrash />
                 </button>
               </td>
             </tr>

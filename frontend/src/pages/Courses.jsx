@@ -1897,6 +1897,123 @@ export default function Courses() {
         } catch (e) {
           // ignore mapping errors
         }
+        // Use backend-provided instructor / creator information when available.
+        // Try to enrich minimal instructor references by fetching the user profile
+        // and the list of courses they own so we can compute students/courses/rating.
+        try {
+          let instr = initialInstructor;
+          // Helper to normalize a profile into our display shape
+          const normalizeProfile = (p) => ({
+            name: p.name || p.fullName || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Instructor',
+            // title is a short headline, description is a longer bio (prefer description/bio/about)
+            title: p.title || '',
+            description: p.description || p.bio || p.about || p.summary || '',
+            stats: {
+              students: (p.studentsCount || p.students || 'N/A'),
+              courses: (p.coursesCount || p.courses || 'N/A'),
+              rating: (p.rating || p.avgRating || 'N/A'),
+            },
+          });
+
+          // Determine the best instructor reference from course payload
+          const ref = course.instructor || course.createdBy || null;
+          let instrId = null;
+
+          if (ref && typeof ref === 'object') {
+            instr = normalizeProfile(ref);
+            instrId = ref._id || ref.id || null;
+          } else if (ref && typeof ref === 'string') {
+            // string may be an id or a display name — attempt to fetch profile by id
+            instrId = ref;
+          }
+
+          // If we have an id but only minimal info, attempt to fetch full user profile
+          if (instrId) {
+            try {
+              const profileResp = await fetch(`/api/users/${instrId}`);
+              if (profileResp.ok) {
+                const profileBody = await profileResp.json();
+                const profile = profileBody && profileBody.data ? profileBody.data : profileBody;
+                if (profile) instr = normalizeProfile(profile);
+              }
+            } catch (e) {
+              // fallback: try instructors endpoint
+              try {
+                const instResp = await fetch(`/api/instructors/${instrId}`);
+                if (instResp.ok) {
+                  const instBody = await instResp.json();
+                  const profile = instBody && instBody.data ? instBody.data : instBody;
+                  if (profile) instr = normalizeProfile(profile);
+                }
+              } catch (e2) {
+                // ignore
+              }
+            }
+
+            // Try to fetch courses authored by this instructor to compute counts & rating
+            try {
+              // Try common query shapes and fall back — API may support one of these
+              let coursesResp = await fetch(`/api/courses?instructor=${instrId}`);
+              if (!coursesResp.ok) coursesResp = await fetch(`/api/courses?createdBy=${instrId}`);
+              if (!coursesResp.ok) coursesResp = await fetch(`/api/courses?author=${instrId}`);
+              if (coursesResp.ok) {
+                const coursesBody = await coursesResp.json();
+                const courseList = coursesBody && (Array.isArray(coursesBody) ? coursesBody : (coursesBody.data || coursesBody.courses)) || [];
+                if (Array.isArray(courseList) && courseList.length) {
+                  // compute total enrolled students across their courses
+                  const totalStudents = courseList.reduce((s, c) => {
+                    if (!c) return s;
+                    if (Array.isArray(c.enrolledStudents)) return s + c.enrolledStudents.length;
+                    if (typeof c.enrolledStudentsCount === 'number') return s + c.enrolledStudentsCount;
+                    if (typeof c.enrolledCount === 'number') return s + c.enrolledCount;
+                    return s;
+                  }, 0);
+                  instr.stats.courses = courseList.length;
+                  instr.stats.students = totalStudents || 'N/A';
+
+                  // compute an aggregated rating from course reviews when available
+                  const ratings = [];
+                  courseList.forEach((c) => {
+                    if (c && Array.isArray(c.reviews)) {
+                      c.reviews.forEach((r) => { if (r && typeof r.rating === 'number') ratings.push(r.rating); });
+                    } else if (c && typeof c.rating === 'number') {
+                      ratings.push(c.rating);
+                    } else if (c && c.averageRating) {
+                      const v = parseFloat(c.averageRating);
+                      if (!isNaN(v)) ratings.push(v);
+                    }
+                  });
+                  if (ratings.length) {
+                    const avg = ratings.reduce((a,b) => a+b,0) / ratings.length;
+                    instr.stats.rating = parseFloat(avg.toFixed(1));
+                  }
+                }
+              }
+            } catch (e) {
+              // ignore course fetch errors
+            }
+          }
+
+          // If we still don't have a description, try to extract it from the course payload
+          if (!instr.description) {
+            try {
+              const maybeSources = [course.instructor, course.createdBy, course.author, course.creator, course.owner];
+              let foundDesc = '';
+              for (const s of maybeSources) {
+                if (!s) continue;
+                if (typeof s === 'string') continue;
+                const tryDesc = s.description || s.bio || s.about || s.summary || (s.profile && (s.profile.description || s.profile.bio));
+                if (tryDesc && typeof tryDesc === 'string' && tryDesc.trim()) { foundDesc = tryDesc.trim(); break; }
+              }
+              if (foundDesc) instr.description = foundDesc;
+            } catch (e) {
+              // ignore
+            }
+          }
+          if (active) setCourseInstructor(instr);
+        } catch (e) {
+          // ignore instructor mapping errors
+        }
         // Course-level stats: enrolled count and rating
         try {
           if (course.enrolledStudents && Array.isArray(course.enrolledStudents)) {
@@ -1927,8 +2044,8 @@ export default function Courses() {
   // Track total courses count for "View More" button visibility
   const [totalCoursesCount, setTotalCoursesCount] = useState(0);
 
-  // Instructor: Persisting the added instructors
-  const [instructor] = useState(initialInstructor);
+  // Instructor: course instructor (uses backend when available) and persisted added instructors
+  const [courseInstructor, setCourseInstructor] = useState(initialInstructor);
   const [otherInstructors, setOtherInstructors] = useLocalStorage(
     "otherInstructors",
     []
@@ -2363,6 +2480,25 @@ export default function Courses() {
     }
   }
 
+  // Compute whether the course is considered completed for this user (server or local)
+  const courseCompleted = (() => {
+    try {
+      // If server reports 100% (or very close), consider completed
+      if (serverProgressLoaded && Number(serverProgressValue) >= 99.99) return true;
+      // If locally all lessons are watched, consider completed
+      if (totalLessons > 0 && watchedCount === totalLessons) return true;
+      // If a persisted completion date exists in localStorage, consider completed
+      try {
+        const keyUser = getCompletionStorageKey(userProfile, currentCourseId);
+        const keyGuest = getCompletionStorageKey(null, currentCourseId);
+        if ((keyUser && window.localStorage.getItem(keyUser)) || (keyGuest && window.localStorage.getItem(keyGuest))) return true;
+      } catch (e) {}
+      return false;
+    } catch (e) {
+      return false;
+    }
+  })();
+
   // Helper to start a lesson: opens player, persists watched state, optimistic UI update,
   // unlocks next lesson and calls backend to mark completion.
   const handleStartLesson = async (lesson, onVideoClick, isLocked, isLessonsUnlockedBySequence) => {
@@ -2457,6 +2593,20 @@ export default function Courses() {
                 setServerProgressLoaded(true);
               }
             } catch (e) {}
+            // If backend confirms completion (completed flag or 100%), persist completion date
+            try {
+              const backendCompleted = (data && (data.data?.completed === true || data.completed === true));
+              const backendPercent = (data && (typeof data.data?.completionPercentage === 'number' ? data.data.completionPercentage : (typeof data.completionPercentage === 'number' ? data.completionPercentage : null)));
+              if (backendCompleted || backendPercent === 100) {
+                try {
+                  const courseIdForKey = courseId || window.localStorage.getItem('currentCourseId');
+                  const key = getCompletionStorageKey(userProfile, courseIdForKey);
+                  window.localStorage.setItem(key, new Date().toISOString());
+                } catch (e) {
+                  // ignore localStorage write errors
+                }
+              }
+            } catch (e) {}
             window.dispatchEvent(new Event('enrollmentUpdated'));
           } else {
             const errorText = await completeRes.text();
@@ -2490,12 +2640,13 @@ export default function Courses() {
           <div className="d-flex align-items-start gap-3">
             {
               (() => {
-                // Determine dynamic icon based on enrollment, sequential unlock, and watched status
+                // Determine dynamic icon based on enrollment, sequential unlock, watched status or course completion
                 let dynamicIconClass = lesson.iconClass;
                 let dynamicBgClass = lesson.iconBgClass;
                 
                 const watchedList = getWatchedFor(currentCourseId) || [];
-                const isWatched = (lesson._id && watchedList.includes(lesson._id)) || watchedList.includes(lesson.title);
+                // Treat all lessons as watched when the entire course is completed
+                const isWatched = courseCompleted || (lesson._id && watchedList.includes(lesson._id)) || watchedList.includes(lesson.title);
                 const currentLessonIndex = allLessonsInOrder.findIndex(l => (l._id && lesson._id) ? l._id === lesson._id : l.title === lesson.title);
                 
                 // Check if previous lesson is watched (for sequential unlocking)
@@ -2514,7 +2665,7 @@ export default function Courses() {
                   dynamicIconClass = "bi-lock-fill";
                   dynamicBgClass = "muted-circle";
                 } else if (isWatched) {
-                  // When enrolled and watched: show checkmark (green)
+                  // When enrolled and watched (or course completed): show checkmark (green)
                   dynamicIconClass = "bi-check2-circle";
                   dynamicBgClass = "lesson-icon";
                 } else if (isLessonUnlocked) {
@@ -2548,7 +2699,8 @@ export default function Courses() {
 
 
               const watchedList2 = getWatchedFor(currentCourseId) || [];
-              const isWatched = (lesson._id && watchedList2.includes(lesson._id)) || watchedList2.includes(lesson.title);
+              // If course is completed, show Review for all lessons
+              const isWatched = courseCompleted || (lesson._id && watchedList2.includes(lesson._id)) || watchedList2.includes(lesson.title);
 
               // Pre-compute sequence unlocking so it can be referenced in onClick as well
               const currentLessonIndex = allLessonsInOrder.findIndex(l => (l._id && lesson._id) ? l._id === lesson._id : l.title === lesson.title);
@@ -2563,14 +2715,15 @@ export default function Courses() {
               if (!enrolled) {
                 visibleLabel = "Locked";
               } else if (isWatched) {
-                // When enrolled and watched: show "Review"
+                // When enrolled and watched (or course completed): show "Review"
                 visibleLabel = "Review";
               } else if (lesson.status === "Review" || lesson.status === "Start") {
                 // Enrolled: check sequential unlock
                 visibleLabel = isLessonsUnlockedBySequence ? "Start" : "Locked";
               }
 
-              const isLocked = visibleLabel === "Locked" || lesson.status === "Locked";
+              // If the whole course is completed, do not treat lessons as locked
+              const isLocked = (!courseCompleted) && (visibleLabel === "Locked" || lesson.status === "Locked");
 
               return (
                 <button
@@ -2580,6 +2733,11 @@ export default function Courses() {
                   onClick={(e) => {
                     e.preventDefault();
                     const isLockedFlag = visibleLabel === "Locked" || lesson.status === "Locked";
+                    // If course is completed, open lesson in review mode (do not re-mark completion)
+                    if (courseCompleted && onVideoClick) {
+                      onVideoClick(lesson);
+                      return;
+                    }
                     handleStartLesson(lesson, onVideoClick, isLockedFlag, isLessonsUnlockedBySequence);
                   }}
                 >
@@ -2757,7 +2915,7 @@ export default function Courses() {
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <div className="muted small mt-2">{watchedCount} of {totalLessons} lessons completed</div>
+              <div className="muted small mt-2">{courseCompleted ? totalLessons : watchedCount} of {totalLessons} lessons completed</div>
             </div>
           </div>
           
@@ -3119,26 +3277,30 @@ export default function Courses() {
               {/* Default Instructor Card (Single Card) */}
               <div className="instructor-card p-4 rounded-3 d-flex flex-column flex-md-row gap-4 mb-4">
                 <div className="instructor-avatar rounded-circle d-flex align-items-center justify-content-center flex-shrink-0">
-                  JS
-                </div>
-                <div>
-                  <h5>{instructor.name}</h5>
-                  <p className="mb-3">{instructor.title}</p>
-                  <div className="d-flex gap-4 small muted">
-                    <div>
-                      <i className="bi bi-people me-1"></i>
-                      {instructor.stats.students} Students
-                    </div>
-                    <div>
-                      <i className="bi bi-journal-check me-1"></i>
-                      {instructor.stats.courses} Courses
-                    </div>
-                    <div>
-                      <i className="bi bi-star me-1"></i>
-                      {instructor.stats.rating} Rating
+                    {courseInstructor && courseInstructor.name ? courseInstructor.name.substring(0,2).toUpperCase() : 'JS'}
+                  </div>
+                  <div>
+                    <h5>{courseInstructor.name}</h5>
+                    {courseInstructor.description ? (
+                      <p className="mb-3">{courseInstructor.description}</p>
+                    ) : courseInstructor.title ? (
+                      <p className="mb-3">{courseInstructor.title}</p>
+                    ) : null}
+                    <div className="d-flex gap-4 small muted">
+                      <div>
+                        <i className="bi bi-people me-1"></i>
+                        {courseInstructor.stats.students} Students
+                      </div>
+                      <div>
+                        <i className="bi bi-journal-check me-1"></i>
+                        {courseInstructor.stats.courses} Courses
+                      </div>
+                      <div>
+                        <i className="bi bi-star me-1"></i>
+                        {courseInstructor.stats.rating} Rating
+                      </div>
                     </div>
                   </div>
-                </div>
               </div>
 
               {/* Other Instructors (Added by user) */}

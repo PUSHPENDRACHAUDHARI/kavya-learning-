@@ -124,6 +124,18 @@ const AdminStudents = () => {
     return out;
   }, [students, searchQuery, cityQuery, genderFilter, nameSort]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
+
+  // Reset to first page when filters/results change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filteredStudents.length, searchQuery, cityQuery, genderFilter, nameSort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const pagedStudents = filteredStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (loading) return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading students...</div></AppLayout>;
 
   return (
@@ -233,7 +245,7 @@ const AdminStudents = () => {
         </thead>
 
         <tbody>
-          {filteredStudents.map((s) => (
+          {pagedStudents.map((s) => (
             <tr key={s._id}>
               {/* STUDENT PERSONAL INFO */}
               <td>
@@ -402,6 +414,22 @@ const AdminStudents = () => {
           ))}
         </tbody>
       </table>
+
+      {/* Pagination Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+        <div className="muted small">Showing {(filteredStudents.length === 0) ? 0 : ((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredStudents.length)} of {filteredStudents.length} students</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+          {/* simple numbered pages */}
+          {Array.from({ length: totalPages }).map((_, i) => {
+            const page = i + 1;
+            return (
+              <button key={page} className={`btn btn-sm ${page === currentPage ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setCurrentPage(page)}>{page}</button>
+            );
+          })}
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+        </div>
+      </div>
 
       {/* Free Course Modal */}
       {showFreeModal && modalStudent && (

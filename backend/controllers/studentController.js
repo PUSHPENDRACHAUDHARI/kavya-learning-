@@ -352,6 +352,22 @@ exports.completeLesson = async (req, res) => {
 
     await student.save();
 
+    // Also update the Enrollment collection so admin reports count completed enrollments
+    try {
+      await Enrollment.findOneAndUpdate(
+        { studentId: student._id, courseId },
+        {
+          $set: {
+            progressPercentage: typeof enrollment.completionPercentage === 'number' ? enrollment.completionPercentage : (enrollment.completionPercentage ? Number(enrollment.completionPercentage) : 0),
+            completed: Number(enrollment.completionPercentage) === 100
+          }
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn('Failed to update Enrollment document after lesson completion:', e.message || e);
+    }
+
     res.json({
       success: true,
       message: 'Lesson marked as complete',
