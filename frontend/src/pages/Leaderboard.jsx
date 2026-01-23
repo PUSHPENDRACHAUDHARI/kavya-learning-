@@ -54,7 +54,7 @@ export default function Leaderboard() {
       "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05)",
   };
 
-  const tabs = ["Overall", "This Month", "This Week", "My Courses"];
+  const tabs = ["Overall"];
 
   // Dynamic achievement badges based on user performance
   const getAchievementBadges = (userData) => {
@@ -262,7 +262,7 @@ export default function Leaderboard() {
                           <Crown
                             className="crown-icon"
                             size={24}
-                            style={{ marginBottom: "8px" }}
+                            style={{ marginBottom: "8px", color: "#FFD700" }}
                           />
                         )}
                         <span
@@ -565,35 +565,6 @@ export default function Leaderboard() {
               Compete with peers and track your progress
             </p>
           </div>
-        </div>
-
-        {/* TABS */}
-        <div className="filter-tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              className={`tab ${activeTab === tab ? "tab-active" : ""}`}
-              onClick={() => {
-                // For month/week tabs, navigate straight to Profile page
-                if (tab === "This Month" || tab === "This Week") {
-                  navigate("/profile");
-                  setActiveTab(tab);
-                  return;
-                }
-
-                // For 'My Courses' tab, navigate to courses page
-                if (tab === "My Courses") {
-                  navigate("/courses");
-                  setActiveTab(tab);
-                  return;
-                }
-
-                setActiveTab(tab);
-              }}
-            >
-              {tab}
-            </button>
-          ))}
         </div>
 
         {/* CONTENT */}
