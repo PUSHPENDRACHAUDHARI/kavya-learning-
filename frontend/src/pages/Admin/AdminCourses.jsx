@@ -17,6 +17,8 @@ const AdminCourses = () => {
   const [titleQuery, setTitleQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
 
+  const navigate = useNavigate();
+
   const loadCourses = async () => {
     try {
       const res = await axiosClient.get('/api/admin/courses');
