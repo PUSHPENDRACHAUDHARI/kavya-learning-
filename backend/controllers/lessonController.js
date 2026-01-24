@@ -14,8 +14,8 @@ exports.createLesson = async (req, res) => {
             return res.status(404).json({ message: 'Course not found' });
         }
 
-        // Verify user is the instructor of this course
-        if (course.instructor.toString() !== req.user._id.toString()) {
+        // Verify user is the instructor of this course OR an admin/sub-admin
+        if (course.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin' && req.user.role !== 'sub-admin') {
             return res.status(403).json({ message: 'Not authorized to add lessons to this course' });
         }
 
