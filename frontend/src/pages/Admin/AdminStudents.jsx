@@ -373,8 +373,8 @@ const AdminStudents = () => {
                 )}
               </td>
 
-              {/* BLOCK / UNBLOCK ACTION */}
-              <td style={{ textAlign: 'center' }}>
+              {/* BLOCK / UNBLOCK & DELETE ACTIONS */}
+              <td style={{ textAlign: 'center', display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {/* Block / Unblock button */}
                 {s.user_status === 'Blocked' ? (
                   <button
@@ -409,6 +409,23 @@ const AdminStudents = () => {
                     Block
                   </button>
                 )}
+
+                {/* Delete button */}
+                <button
+                  className="btn btn-sm"
+                  style={{ backgroundColor: '#dc3545', color: 'white', border: '1px solid #dc3545', width: '80px', height: '30px', padding: '2px 8px' }}
+                  onClick={async () => {
+                    if (!window.confirm(`⚠️ Are you sure you want to permanently delete ${s.fullName}? This action cannot be undone.`)) return;
+                    try {
+                      await axiosClient.delete(`/api/admin/users/${s._id}`);
+                      await loadStudents();
+                    } catch (err) {
+                      alert(err?.response?.data?.message || 'Failed to delete student');
+                    }
+                  }}
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}
