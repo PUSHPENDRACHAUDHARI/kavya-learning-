@@ -262,16 +262,35 @@ export async function getUpcomingClasses(limit = 20, page = 1) {
 // a public instructors list; return empty array when unavailable.
 export async function getInstructors() {
   try {
-    // Try common endpoint if available
-    const res = await fetch(`${BASE}/users?role=instructor`, { headers: authHeaders() });
-    if (res.ok) return res.json();
+    // Try admin endpoint first (for admin panel)
+    const adminRes = await fetch(`${BASE}/admin/instructors`, { headers: authHeaders() });
+    if (adminRes.ok) {
+      const adminData = await adminRes.json();
+      // Handle both array and object with data property
+      return Array.isArray(adminData) ? adminData : (adminData.data || []);
+    }
   } catch (err) {
     // ignore and fall through
   }
+  
+  try {
+    // Try common endpoint if available
+    const res = await fetch(`${BASE}/users?role=instructor`, { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.data || []);
+    }
+  } catch (err) {
+    // ignore and fall through
+  }
+
   // Fallback: try instructor route (may require auth/role)
   try {
     const res2 = await fetch(`${BASE}/instructor/students`, { headers: authHeaders() });
-    if (res2.ok) return res2.json();
+    if (res2.ok) {
+      const data = await res2.json();
+      return Array.isArray(data) ? data : (data.data || []);
+    }
   } catch (err) {
     // ignore
   }

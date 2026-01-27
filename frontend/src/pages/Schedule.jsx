@@ -39,6 +39,16 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
   const [loadingInstructors, setLoadingInstructors] = useState(false);
   const [instructorsError, setInstructorsError] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [instructorSearch, setInstructorSearch] = useState("");
+  const [showInstructorDropdown, setShowInstructorDropdown] = useState(false);
+
+  // Filter instructors based on search
+  const filteredInstructors = instructors.filter(instr => {
+    const searchLower = instructorSearch.toLowerCase();
+    const fullName = (instr.fullName || instr.name || "").toLowerCase();
+    const email = (instr.email || "").toLowerCase();
+    return fullName.includes(searchLower) || email.includes(searchLower);
+  });
 
   useEffect(() => {
     // If editing, populate form with event data
@@ -56,10 +66,12 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         maxStudents: eventToEdit.maxStudents || 30,
         meetLink: eventToEdit.meetLink || "",
       });
+      setInstructorSearch("");
     } else if (presetDate && isOpen) {
       // presetDate is a Date object
       const iso = new Date(presetDate).toISOString().slice(0,10);
       setForm((f) => ({ ...f, date: iso }));
+      setInstructorSearch("");
     }
     // Fetch instructors when modal opens
     (async () => {
@@ -312,20 +324,72 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
  
             <div className="col-md-6">
               <label className="form-label">Instructor</label>
-              <select
-                name="instructor"
-                value={form.instructor}
-                onChange={handleChange}
-                className="form-select"
-              >
-                <option value="">Select an instructor</option>
-                {instructors.map(instr => (
-                  <option key={instr._id} value={instr._id}>
-                    {instr.fullName || instr.name || instr.email}
-                  </option>
-                ))}
-              </select>
-              {instructorsError && <small className="text-danger">{instructorsError}</small>}
+              <div className="position-relative">
+                <input
+                  type="text"
+                  value={instructorSearch}
+                  onChange={(e) => {
+                    setInstructorSearch(e.target.value);
+                    setShowInstructorDropdown(true);
+                  }}
+                  onFocus={() => setShowInstructorDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowInstructorDropdown(false), 200)}
+                  className="form-control"
+                  placeholder="Search instructor by name or email..."
+                  disabled={loadingInstructors}
+                />
+                {showInstructorDropdown && filteredInstructors.length > 0 && (
+                  <div className="dropdown-menu" style={{
+                    display: 'block',
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    marginTop: '2px'
+                  }}>
+                    {filteredInstructors.map(instr => (
+                      <button
+                        key={instr._id}
+                        type="button"
+                        className="dropdown-item"
+                        onClick={() => {
+                          setForm(prev => ({ ...prev, instructor: instr._id }));
+                          setInstructorSearch(instr.fullName || instr.name || instr.email);
+                          setShowInstructorDropdown(false);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div>
+                          <strong>{instr.fullName || instr.name}</strong>
+                          <br />
+                          <small className="text-muted">{instr.email}</small>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showInstructorDropdown && filteredInstructors.length === 0 && instructorSearch && (
+                  <div className="dropdown-menu" style={{
+                    display: 'block',
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    marginTop: '2px'
+                  }}>
+                    <div className="dropdown-item text-muted">
+                      No instructors found
+                    </div>
+                  </div>
+                )}
+              </div>
+              {instructorsError && <small className="text-danger d-block mt-2">{instructorsError}</small>}
             </div>
             <div className="col-md-6">
               <label className="form-label">Event Type</label>
