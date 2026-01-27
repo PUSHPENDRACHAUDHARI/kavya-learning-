@@ -207,11 +207,8 @@ exports.createCourse = async (req, res) => {
   try {
     const payload = req.body;
     payload.createdBy = req.user._id;
-    
-    // If no instructor provided, set the admin as instructor
-    if (!payload.instructor) {
-      payload.instructor = req.user._id;
-    }
+    // Note: do not auto-assign `instructor` to the creating admin.
+    // Courses created by admins remain unassigned unless an `instructor` is explicitly provided.
     
     // Ensure price and duration have default values if not provided
     if (payload.price === undefined || payload.price === null || payload.price === '') {
@@ -265,6 +262,22 @@ exports.updateCourse = async (req, res) => {
     await course.save();
     await ActivityLog.create({ action: 'update_course', performedBy: req.user._id, targetType: 'Course', targetId: course._id, details: req.body });
     res.json(course);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// Unassign instructor from course (admin only)
+// @route   PUT /api/admin/courses/:id/unassign
+// @access  Private (admin/sub-admin with manageCourses)
+exports.unassignCourse = async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    // Use direct update without running validators so we can clear required field safely
+    const updated = await Course.findByIdAndUpdate(courseId, { $unset: { instructor: 1 } }, { new: true });
+    if (!updated) return res.status(404).json({ message: 'Course not found' });
+    await ActivityLog.create({ action: 'unassign_course', performedBy: req.user._id, targetType: 'Course', targetId: updated._id, details: { previousInstructor: req.user._id } });
+    res.json({ message: 'Instructor unassigned', course: updated });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

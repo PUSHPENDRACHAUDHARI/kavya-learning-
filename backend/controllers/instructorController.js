@@ -528,6 +528,40 @@ exports.updateStudentStatus = async (req, res) => {
   }
 };
 
+// @desc    Remove a student from all courses of this instructor
+// @route   DELETE /api/instructor/students/:studentId
+// @access  Private/Instructor
+exports.removeStudentFromInstructor = async (req, res) => {
+  try {
+    const studentId = req.params.studentId;
+    const student = await User.findById(studentId);
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
+    // Find courses owned by this instructor where the student is enrolled
+    const instructorCourses = await Course.find({ instructor: req.user._id, enrolledStudents: studentId });
+    if (!instructorCourses || instructorCourses.length === 0) {
+      return res.status(404).json({ success: false, message: 'Student not enrolled in any of your courses' });
+    }
+
+    const courseIds = instructorCourses.map(c => c._id);
+
+    // Remove student from each course's enrolledStudents array
+    await Course.updateMany(
+      { _id: { $in: courseIds } },
+      { $pull: { enrolledStudents: studentId } }
+    );
+
+    // Remove these courses from the student's enrolledCourses subdocuments
+    student.enrolledCourses = (student.enrolledCourses || []).filter(ec => !courseIds.some(id => id.toString() === ec.course.toString()));
+    await student.save();
+
+    return res.json({ success: true, message: 'Student removed from your courses' });
+  } catch (error) {
+    console.error('removeStudentFromInstructor error', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get student's course progress
 // @route   GET /api/instructor/students/:studentId/progress/:courseId
 // @access  Private/Instructor

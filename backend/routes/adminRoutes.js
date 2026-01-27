@@ -25,6 +25,7 @@ router.post('/courses', protect, authorize('admin','sub-admin'), requirePermissi
 router.get('/courses', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.listCourses);
 router.get('/courses/:id', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.getCourse);
 router.put('/courses/:id', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.updateCourse);
+router.put('/courses/:id/unassign', protect, authorize('admin','sub-admin'), requirePermission('manageCourses'), admin.unassignCourse);
 router.delete('/courses/:id', protect, authorize('admin'), admin.deleteCourse);
 
 // Enrollments

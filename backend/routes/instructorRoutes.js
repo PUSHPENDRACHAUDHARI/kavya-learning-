@@ -14,6 +14,7 @@ const {
   getInstructorStudents,
   getStudentProfile,
   updateStudentStatus,
+  removeStudentFromInstructor,
   getStudentCourseProgress
 } = require('../controllers/instructorController');
 
@@ -43,6 +44,7 @@ router.delete('/lessons/:id', deleteLesson);
 router.get('/students', getInstructorStudents);
 router.get('/students/:studentId', getStudentProfile);
 router.put('/students/:studentId', updateStudentStatus);
+router.delete('/students/:studentId', removeStudentFromInstructor);
 router.get('/students/:studentId/progress/:courseId', getStudentCourseProgress);
 
 module.exports = router;
