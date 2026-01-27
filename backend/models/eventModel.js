@@ -61,6 +61,10 @@ const eventSchema = new mongoose.Schema({
         type: String,
         enum: ['student', 'parent', 'instructor', 'admin', 'sub-admin'],
         default: null
+    },
+    meetLink: {
+        type: String,
+        default: null
     }
 }, {
     timestamps: true

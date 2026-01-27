@@ -33,6 +33,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     endPeriod: "AM",
     location: "",
     maxStudents: 30,
+    meetLink: "",
   });
   const [instructors, setInstructors] = useState([]);
   const [loadingInstructors, setLoadingInstructors] = useState(false);
@@ -53,6 +54,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         endPeriod: eventToEdit.endTime ? eventToEdit.endTime.split(' ')[1] || "AM" : "AM",
         location: eventToEdit.location || "",
         maxStudents: eventToEdit.maxStudents || 30,
+        meetLink: eventToEdit.meetLink || "",
       });
     } else if (presetDate && isOpen) {
       // presetDate is a Date object
@@ -145,13 +147,13 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       endTime: `${form.endTime} ${form.endPeriod}`
     } : {
       title: form.title,
-      instructor: form.instructor,
       date: form.date,
       startTime: `${form.startTime} ${form.startPeriod}`,
       endTime: `${form.endTime} ${form.endPeriod}`,
       location: form.location || "Online",
       maxStudents: form.maxStudents,
       type: form.type,
+      meetLink: form.meetLink || null,
     };
  
     // Try to save to backend; fall back to local update on failure
@@ -191,6 +193,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
             students: getStudentsText(res),
             type: res.type || form.type,
             status: res.status || 'Scheduled',
+            meetLink: res.meetLink || form.meetLink || null,
             _id: res._id
           });
         } else if (res && (res.message || res.error)) {
@@ -309,13 +312,20 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
  
             <div className="col-md-6">
               <label className="form-label">Instructor</label>
-              <input
+              <select
                 name="instructor"
                 value={form.instructor}
                 onChange={handleChange}
-                className="form-control"
-                placeholder="Type instructor name"
-              />
+                className="form-select"
+              >
+                <option value="">Select an instructor</option>
+                {instructors.map(instr => (
+                  <option key={instr._id} value={instr._id}>
+                    {instr.fullName || instr.name || instr.email}
+                  </option>
+                ))}
+              </select>
+              {instructorsError && <small className="text-danger">{instructorsError}</small>}
             </div>
             <div className="col-md-6">
               <label className="form-label">Event Type</label>
@@ -414,6 +424,17 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                     value={form.maxStudents}
                     onChange={handleChange}
                     className="form-control"
+                  />
+                </div>
+                <div className="col-12">
+                  <label className="form-label">Meet Link (for live class)</label>
+                  <input
+                    type="url"
+                    name="meetLink"
+                    value={form.meetLink}
+                    onChange={handleChange}
+                    className="form-control"
+                    placeholder="e.g., https://meet.google.com/abc-defg-hij"
                   />
                 </div>
               </>
@@ -1540,6 +1561,20 @@ function Schedule() {
                         Remind
                       </button>
                     )}
+                    {classItem.meetLink ? (
+                      <button
+                        className="btn btn-info btn-sm d-flex align-items-center gap-1"
+                        onClick={() => {
+                          window.open(classItem.meetLink, '_blank');
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M23 7l-7 5 7 5V7z"/>
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        Join Meet
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
