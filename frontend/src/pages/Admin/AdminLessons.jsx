@@ -17,8 +17,6 @@ const AdminLessons = () => {
   const [courses, setCourses] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
-    content: '',
     videoUrl: '',
     duration: ''
   });
@@ -93,12 +91,8 @@ const AdminLessons = () => {
         alert('Please enter a lesson title.');
         return;
       }
-      if (!formData.description || !formData.description.trim()) {
-        alert('Please enter a lesson description.');
-        return;
-      }
-      if (!formData.content || !formData.content.trim()) {
-        alert('Please enter lesson content.');
+      if (!formData.videoUrl || !formData.videoUrl.trim()) {
+        alert('Please enter a video URL for the lesson.');
         return;
       }
 
@@ -119,12 +113,9 @@ const AdminLessons = () => {
       const payload = {
         courseId: selectedCourse,
         title: formData.title.trim(),
-        description: formData.description.trim(),
-        content: formData.content.trim(),
+        videoUrl: formData.videoUrl.trim(),
         duration: durationNum
       };
-
-      if (formData.videoUrl && formData.videoUrl.trim()) payload.videoUrl = formData.videoUrl.trim();
 
       if (editingLesson) {
         await axiosClient.put(`/api/lessons/${editingLesson._id}`, payload);
@@ -139,7 +130,7 @@ const AdminLessons = () => {
 
       await loadCoursesAndLessons();
       setShowForm(false);
-      setFormData({ title: '', description: '', content: '', videoUrl: '', duration: '' });
+      setFormData({ title: '', videoUrl: '', duration: '' });
       setEditingLesson(null);
     } catch (error) {
       console.error('Error saving lesson:', error);
@@ -153,8 +144,6 @@ const AdminLessons = () => {
     setSelectedCourse(lesson.course || lesson.courseId);
     setFormData({
       title: lesson.title,
-      description: lesson.description,
-      content: lesson.content,
       videoUrl: lesson.videoUrl || '',
       duration: lesson.duration
     });
@@ -178,6 +167,19 @@ const AdminLessons = () => {
 
   const filteredLessons = selectedCourse ? lessons.filter(l => (l.course || l.courseId) === selectedCourse) : lessons;
 
+  const formatDuration = (d) => {
+    if (d === undefined || d === null) return '';
+    const num = typeof d === 'number' ? d : (parseFloat(String(d)) || 0);
+    if (!Number.isFinite(num)) return '';
+    const mins = Math.max(0, Math.floor(num));
+    if (mins >= 60) {
+      const hrs = Math.floor(mins / 60);
+      const rem = mins % 60;
+      return rem ? `${hrs}h ${rem}m` : `${hrs}h`;
+    }
+    return `${mins}m`;
+  };
+
   return (
     <AppLayout showGreeting={false}>
       <div className="instructor-lessons">
@@ -199,7 +201,7 @@ const AdminLessons = () => {
               <option key={course._id} value={course._id}>{course.title}</option>
             ))}
           </select>
-          <button className="btn btn-primary" onClick={() => { setEditingLesson(null); setFormData({ title: '', description: '', content: '', videoUrl: '', duration: '' }); setShowForm(!showForm); }}>
+          <button className="btn btn-primary" onClick={() => { setEditingLesson(null); setFormData({ title: '', videoUrl: '', duration: '' }); setShowForm(!showForm); }}>
             {showForm ? 'Cancel' : '+ Add Lesson'}
           </button>
         </div>
@@ -209,9 +211,7 @@ const AdminLessons = () => {
             <h3>{editingLesson ? 'Edit Lesson' : 'Create New Lesson'}</h3>
             <form onSubmit={handleSubmit} className="lesson-form">
               <input type="text" name="title" placeholder="Lesson Title" value={formData.title} onChange={handleInputChange} className="form-control" required />
-              <textarea name="description" placeholder="Lesson Description" value={formData.description} onChange={handleInputChange} className="form-control" rows="3" />
-              <textarea name="content" placeholder="Lesson Content" value={formData.content} onChange={handleInputChange} className="form-control" rows="5" />
-              <input type="text" name="videoUrl" placeholder="Video URL (optional)" value={formData.videoUrl} onChange={handleInputChange} className="form-control" />
+              <input type="text" name="videoUrl" placeholder="Video URL" value={formData.videoUrl} onChange={handleInputChange} className="form-control" required />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <label style={{ marginRight: 8, color: '#333', minWidth: 80 }}>Duration</label>
                 <DurationPicker mode="hm" value={formData.duration} onChange={(v) => setFormData(prev => ({ ...prev, duration: v }))} />
@@ -232,10 +232,49 @@ const AdminLessons = () => {
                 <div key={lesson._id} className="lesson-card">
                   <div className="lesson-card-header">
                     <h3>{lesson.title}</h3>
-                    <span className="lesson-duration">{lesson.duration}</span>
+                    <span className="lesson-duration">{formatDuration(lesson.duration)}</span>
                   </div>
-                  <p className="lesson-description">{lesson.description}</p>
-                  <p className="lesson-content-preview">{(lesson.content || '').substring(0,100)}...</p>
+                  {(() => {
+                    const raw = lesson.videoUrl || lesson.videoLink || lesson.content || '';
+                    const extractYouTubeId = (input) => {
+                      if (!input) return null;
+                      const s = String(input).trim();
+                      // iframe src
+                      if (s.startsWith('<iframe')) {
+                        const m = s.match(/src=["']([^"']+)["']/i);
+                        if (m) return extractYouTubeId(m[1]);
+                      }
+                      // embed
+                      let m = s.match(/youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i);
+                      if (m) return m[1];
+                      // short link
+                      m = s.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/i);
+                      if (m) return m[1];
+                      // watch?v=
+                      m = s.match(/[?&]v=([A-Za-z0-9_-]{6,})/i);
+                      if (m) return m[1];
+                      // last path segment
+                      try {
+                        const u = new URL(s, window.location.origin);
+                        const parts = u.pathname.split('/').filter(Boolean);
+                        const last = parts[parts.length - 1];
+                        if (last && /^[A-Za-z0-9_-]{6,}$/.test(last)) return last;
+                      } catch (e) {}
+                      return null;
+                    };
+
+                    const ytId = extractYouTubeId(raw);
+                    if (ytId) {
+                      const thumb = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+                      return (
+                        <div style={{ margin: '8px 0' }}>
+                          <img src={thumb} alt={`${lesson.title} thumbnail`} style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 6 }} />
+                        </div>
+                      );
+                    }
+
+                    return <p className="lesson-content-preview">{(lesson.description || lesson.content || '').substring(0,100)}...</p>;
+                  })()}
                   <div className="lesson-card-footer">
                     <button className="btn-edit" onClick={() => handleEdit(lesson)}>Edit</button>
                     <button className="btn-delete" onClick={() => handleDelete(lesson._id)}>Delete</button>

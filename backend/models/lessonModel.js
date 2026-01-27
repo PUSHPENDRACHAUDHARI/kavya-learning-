@@ -12,11 +12,11 @@ const lessonSchema = new mongoose.Schema({
     },
     description: {
         type: String,
-        required: [true, 'Lesson description is required']
+        default: ''
     },
     content: {
         type: String,
-        required: true
+        default: ''
     },
     videoUrl: {
         type: String

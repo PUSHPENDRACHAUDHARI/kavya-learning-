@@ -358,6 +358,8 @@ exports.updateLesson = async (req, res) => {
       new: true,
       runValidators: true
     }).populate('quiz');
+    // Respond with the updated lesson
+    return res.json({ success: true, message: 'Lesson updated successfully', data: lesson });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
