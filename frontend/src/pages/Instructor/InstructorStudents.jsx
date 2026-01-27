@@ -12,6 +12,7 @@ const InstructorStudents = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentDetails, setStudentDetails] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
 
   const filteredStudents = useMemo(() => {
     const q = (searchQuery || '').toLowerCase().trim();
@@ -45,6 +46,23 @@ const InstructorStudents = () => {
       setStudentDetails(res.data.data);
     } catch (error) {
       console.error('Failed to load student details:', error);
+    }
+  };
+
+  
+
+  const handleRemoveStudent = async (studentId) => {
+    if (!window.confirm('Remove this student from your courses? This will unenroll them from courses you teach.')) return;
+    try {
+      setActionLoading(studentId);
+      await axiosClient.delete(`/api/instructor/students/${studentId}`);
+      await loadStudents();
+      // close details if showing
+      if (selectedStudent === studentId) handleCloseDetails();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to remove student');
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -125,7 +143,7 @@ const InstructorStudents = () => {
                         {student.status || 'active'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px' }}>
+                    <td style={{ padding: '12px', display: 'flex', gap: 8, alignItems: 'center' }}>
                       <button 
                         onClick={() => handleViewStudent(student._id)}
                         style={{
@@ -138,6 +156,21 @@ const InstructorStudents = () => {
                         }}
                       >
                         View Details
+                      </button>
+
+                      <button
+                        onClick={() => handleRemoveStudent(student._id)}
+                        disabled={actionLoading === student._id}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {actionLoading === student._id ? 'Removing...' : 'Remove'}
                       </button>
                     </td>
                   </tr>

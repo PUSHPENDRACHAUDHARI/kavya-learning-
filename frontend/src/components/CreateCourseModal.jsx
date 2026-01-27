@@ -103,7 +103,9 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess, course }) => {
       const createdCourse = created && created._id ? created : (created.data || created);
 
       // If an image was selected, upload it to the server and attach as thumbnail
-      if (selectedImage && course && course._id) {
+      // Use the created/updated course id (supports both create and edit flows)
+      const targetCourseId = (course && course._id) || (createdCourse && createdCourse._id);
+      if (selectedImage && targetCourseId) {
         try {
           const imgPayload = new FormData();
           imgPayload.append('file', selectedImage);
@@ -113,7 +115,7 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess, course }) => {
           const imageUrl = uploadRes?.data?.url || uploadRes?.data?.secure_url || uploadRes?.data?.data?.url;
           if (imageUrl) {
             // update admin course thumbnail
-            await axiosClient.put(`/api/admin/courses/${course._id}`, { thumbnail: imageUrl });
+            await axiosClient.put(`/api/admin/courses/${targetCourseId}`, { thumbnail: imageUrl });
           }
         } catch (err) {
           console.warn('Image upload failed', err?.response?.data || err.message || err);
@@ -121,13 +123,13 @@ const CreateCourseModal = ({ isOpen, onClose, onSuccess, course }) => {
       }
 
       // If a PDF was selected, upload it to the server and attach to the course
-      if (selectedFile && course && course._id) {
+      if (selectedFile && targetCourseId) {
         try {
           setUploading(true);
           setUploadProgress(0);
           const payload = new FormData();
           payload.append('pdfResource', selectedFile);
-          const uploadRes = await axiosClient.post(`/api/admin/course/upload-pdf/${course._id}`, payload, {
+          const uploadRes = await axiosClient.post(`/api/admin/course/upload-pdf/${targetCourseId}`, payload, {
             headers: { 'Content-Type': 'multipart/form-data' },
             onUploadProgress: (progressEvent) => {
               const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));

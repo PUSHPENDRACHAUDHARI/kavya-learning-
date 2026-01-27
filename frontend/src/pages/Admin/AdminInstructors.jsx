@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import axiosClient from "../../api/axiosClient";
 import AppLayout from "../../components/AppLayout";
 import AddInstructorForm from "../../components/AddInstructorForm";
+import AssignCourseModal from "../../components/AssignCourseModal";
 import "../../assets/admin-dark-mode.css";
 
 const AdminInstructors = () => {
@@ -14,6 +15,12 @@ const AdminInstructors = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [deleteLoading, setDeleteLoading] = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [removingCourseId, setRemovingCourseId] = useState(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignInstructorId, setAssignInstructorId] = useState(null);
+  const [openAssignedFor, setOpenAssignedFor] = useState(null);
 
   const loadInstructors = async () => {
     try {
@@ -29,7 +36,21 @@ const AdminInstructors = () => {
 
   useEffect(() => {
     loadInstructors();
+    loadCourses();
   }, []);
+
+  const loadCourses = async () => {
+    try {
+      setLoadingCourses(true);
+      const res = await axiosClient.get('/api/admin/courses?limit=1000');
+      setCourses(res.data.data || res.data);
+    } catch (err) {
+      console.error('Failed loading courses', err);
+      setCourses([]);
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
 
   // Filter and search instructors
   const filteredInstructors = useMemo(() => {
@@ -96,6 +117,31 @@ const AdminInstructors = () => {
 
   const handleFormSuccess = () => {
     loadInstructors();
+  };
+
+  const openAssignModal = (instructorId) => {
+    setAssignInstructorId(instructorId);
+    setAssignModalOpen(true);
+  };
+
+  const closeAssignModal = () => {
+    setAssignInstructorId(null);
+    setAssignModalOpen(false);
+  };
+
+  const removeAssignedCourse = async (courseId) => {
+    if (!window.confirm('Remove this course assignment from instructor?')) return;
+    try {
+      setRemovingCourseId(courseId);
+      await axiosClient.put(`/api/admin/courses/${courseId}/unassign`);
+      await loadCourses();
+      await loadInstructors();
+      alert('Course unassigned');
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to remove assignment');
+    } finally {
+      setRemovingCourseId(null);
+    }
   };
 
   if (loading)
@@ -246,6 +292,7 @@ const AdminInstructors = () => {
                 >
                   Full Name
                 </th>
+                
                 <th
                   style={{
                     padding: "12px",
@@ -268,7 +315,14 @@ const AdminInstructors = () => {
             </thead>
             <tbody>
               {paginatedInstructors.length > 0 ? (
-                paginatedInstructors.map((instructor) => (
+                paginatedInstructors.map((instructor) => {
+                  const assignedForInstructor = (courses || []).filter(c => {
+                    const inst = c.instructor;
+                    const instId = inst && (inst._id || inst);
+                    return instId && String(instId) === String(instructor._id);
+                  });
+
+                  return (
                   <tr
                     key={instructor._id}
                     style={{ borderBottom: "1px solid #dee2e6" }}
@@ -277,6 +331,7 @@ const AdminInstructors = () => {
                     <td style={{ padding: "12px" }}>
                       {instructor.fullName || "N/A"}
                     </td>
+                    
                     <td style={{ padding: "12px" }}>
                       <span
                         style={{
@@ -307,6 +362,30 @@ const AdminInstructors = () => {
                         flexWrap: "wrap",
                       }}
                     >
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%' }}>
+                        <button
+                          onClick={() => setOpenAssignedFor(openAssignedFor === instructor._id ? null : instructor._id)}
+                          style={{ padding: '6px 10px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}
+                        >
+                          Assigned ({assignedForInstructor.length})
+                        </button>
+
+                        {openAssignedFor === instructor._id && assignedForInstructor.length > 0 && (
+                          <div style={{ marginTop: 8, width: 260, background: 'white', border: '1px solid #e0e0e0', borderRadius: 6, padding: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                            {assignedForInstructor.map(c => (
+                              <div key={c._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f1f1f1' }}>
+                                <div style={{ fontSize: 13 }}>{c.title || 'Untitled'}</div>
+                                <button onClick={() => removeAssignedCourse(c._id)} disabled={removingCourseId === c._id} style={{ padding: '4px 8px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: 4, cursor: removingCourseId === c._id ? 'not-allowed' : 'pointer' }}>
+                                  {removingCourseId === c._id ? 'Removing...' : 'Remove'}
+                                </button>
+                              </div>
+                            ))}
+                            <div style={{ textAlign: 'right', marginTop: 6 }}>
+                              <button onClick={() => setOpenAssignedFor(null)} style={{ padding: '6px 8px', backgroundColor: '#f1f1f1', border: 'none', borderRadius: 4 }}>Close</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       {instructor.status === "blocked" ? (
                         <button
                           onClick={() =>
@@ -345,6 +424,21 @@ const AdminInstructors = () => {
                         </button>
                       )}
                       <button
+                        onClick={() => openAssignModal(instructor._id)}
+                        style={{
+                          padding: "6px 12px",
+                          backgroundColor: "#17a2b8",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        Assign Course
+                      </button>
+                      <button
                         onClick={() => handleDelete(instructor._id)}
                         disabled={deleteLoading === instructor._id}
                         style={{
@@ -363,7 +457,8 @@ const AdminInstructors = () => {
                       </button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan="4" style={{ padding: "20px", textAlign: "center" }}>
@@ -424,6 +519,17 @@ const AdminInstructors = () => {
           </div>
         )}
       </div>
+
+      <AssignCourseModal
+        isOpen={assignModalOpen}
+        onClose={closeAssignModal}
+        instructorId={assignInstructorId}
+        onAssigned={async () => {
+          // refresh courses and instructors after assignment
+          await loadCourses();
+          await loadInstructors();
+        }}
+      />
     </AppLayout>
   );
 };
