@@ -13,7 +13,8 @@ const createEvent = asyncHandler(async (req, res) => {
         endTime,
         location,
         maxStudents,
-        course
+        course,
+        meetLink
     } = req.body;
 
     // Combine date + time into full Date objects and validate
@@ -62,6 +63,7 @@ const createEvent = asyncHandler(async (req, res) => {
         location,
         maxStudents,
         course,
+        meetLink,
         createdByUserId: req.user._id,
         createdByRole: req.user.role
     });
