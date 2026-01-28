@@ -38,6 +38,7 @@ import InstructorCourses from './pages/Instructor/InstructorCourses';
 import InstructorStudents from './pages/Instructor/InstructorStudents';
 import InstructorLessons from './pages/Instructor/InstructorLessons';
 import InstructorAnalytics from './pages/Instructor/InstructorAnalytics';
+import InstructorAttendance from './pages/Instructor/InstructorAttendance';
 // Student Pages
 import StudentDashboard from './pages/Student/StudentDashboard';
 import StudentCourses from './pages/Student/StudentCourses';
@@ -119,6 +120,7 @@ function Layout() {
           <Route path="/instructor/lessons" element={<ProtectedRoute requireRole="instructor"><InstructorLessons /></ProtectedRoute>} />
           <Route path="/instructor/analytics" element={<ProtectedRoute requireRole="instructor"><InstructorAnalytics /></ProtectedRoute>} />
           <Route path="/instructor/announcements" element={<ProtectedRoute requireRole="instructor"><InstructorAnnouncements /></ProtectedRoute>} />
+          <Route path="/instructor/attendance" element={<ProtectedRoute requireRole="instructor"><InstructorAttendance /></ProtectedRoute>} />
 
           {/* Student Routes */}
           <Route path="/dashboard" element={<ProtectedRoute requireRole="student"><Dashboard /></ProtectedRoute>} />

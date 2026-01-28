@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Calendar, Bell } from "lucide-react";
 import "../assets/schedule.css";
 import AppLayout from "../components/AppLayout";
+import axiosClient from '../api/axiosClient';
  
 // Helper available to modal and other early code: prefer enrolledStudents, then maxStudents
 const getStudentsText = (evt) => {
@@ -25,6 +26,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
   const [form, setForm] = useState({
     title: "",
     instructor: "",
+    course: "",
     type: "Live Class",
     date: "",
     startTime: "",
@@ -36,6 +38,9 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     meetLink: "",
   });
   const [instructors, setInstructors] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [coursesError, setCoursesError] = useState(null);
   const [loadingInstructors, setLoadingInstructors] = useState(false);
   const [instructorsError, setInstructorsError] = useState(null);
   const [formError, setFormError] = useState(null);
@@ -56,6 +61,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       setForm({
         title: eventToEdit.title || "",
         instructor: eventToEdit.instructor || "",
+        course: eventToEdit.course || "",
         type: eventToEdit.type || "Live Class",
         date: eventToEdit.date || "",
         startTime: eventToEdit.startTime ? eventToEdit.startTime.split(' ')[0] : "",
@@ -87,6 +93,20 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         setInstructorsError('Unable to load instructors');
       } finally {
         setLoadingInstructors(false);
+      }
+      // Fetch instructor's courses when modal opens (instructor role)
+      try {
+        setLoadingCourses(true);
+        const r = await axiosClient.get('/api/instructor/courses');
+        const data = r.data && (r.data.data || r.data) ? (r.data.data || r.data) : [];
+        setCourses(Array.isArray(data) ? data : []);
+        setCoursesError(null);
+      } catch (err) {
+        console.warn('Failed to load instructor courses', err.message || err);
+        setCourses([]);
+        setCoursesError('Unable to load courses');
+      } finally {
+        setLoadingCourses(false);
       }
     })();
   }, [presetDate, isOpen, eventToEdit]);
@@ -159,6 +179,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       endTime: `${form.endTime} ${form.endPeriod}`
     } : {
       title: form.title,
+      course: form.course || null,
       date: form.date,
       startTime: `${form.startTime} ${form.startPeriod}`,
       endTime: `${form.endTime} ${form.endPeriod}`,
@@ -489,6 +510,22 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                     onChange={handleChange}
                     className="form-control"
                   />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Subject (Course)</label>
+                  <select
+                    name="course"
+                    value={form.course}
+                    onChange={handleChange}
+                    className="form-select"
+                  >
+                    <option value="">-- Select course --</option>
+                    {courses && courses.map(c => (
+                      <option key={c._id} value={c._id}>{c.title}</option>
+                    ))}
+                  </select>
+                  {loadingCourses && <small className="text-muted">Loading courses...</small>}
+                  {coursesError && <small className="text-danger d-block">{coursesError}</small>}
                 </div>
                 <div className="col-12">
                   <label className="form-label">Meet Link (for live class)</label>
@@ -1628,8 +1665,16 @@ function Schedule() {
                     {classItem.meetLink ? (
                       <button
                         className="btn btn-info btn-sm d-flex align-items-center gap-1"
-                        onClick={() => {
-                          window.open(classItem.meetLink, '_blank');
+                        onClick={async () => {
+                          try {
+                            // Record attendance for this event (instructor endpoint expects auth)
+                            await axiosClient.post(`/api/attendance/events/${classItem._id}/record`);
+                          } catch (err) {
+                            // don't block join on errors; just log
+                            console.warn('Failed to record attendance', err?.response?.data || err.message || err);
+                          } finally {
+                            window.open(classItem.meetLink, '_blank');
+                          }
                         }}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

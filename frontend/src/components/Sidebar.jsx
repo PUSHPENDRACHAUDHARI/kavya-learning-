@@ -123,6 +123,7 @@ function Sidebar({ isOpen, setIsOpen }) {
       { type: 'section', label: 'Instructor Panel' },
       { path: "/instructor/dashboard", label: "Dashboard", icon: <FiHome /> },
       { path: "/instructor/courses", label: "My Courses", icon: <AiOutlineBook /> },
+      { path: "/instructor/attendance", label: "Attendance", icon: <MdEditDocument /> },
       { path: "/instructor/students", label: "Students", icon: <MdPerson/> },
       { path: "/instructor/lessons", label: "Manage Lessons", icon: <MdAutoStories /> },
       { path: "/instructor/analytics", label: "Analytics", icon: <TbReportAnalytics /> },
