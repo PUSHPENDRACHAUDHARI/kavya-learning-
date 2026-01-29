@@ -131,6 +131,7 @@ const scheduleRoutes = require('./routes/scheduleRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+const sharedEventsRoutes = require('./routes/sharedEventsRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -155,6 +156,7 @@ app.use('/api/schedule', scheduleRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/shared-events', sharedEventsRoutes);
 
 // Ensure uploads folder exists and serve statically so uploaded PDFs are accessible
 const uploadsDir = path.join(__dirname, 'uploads');

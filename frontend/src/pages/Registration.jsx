@@ -20,6 +20,10 @@ function Registration() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState('form'); // 'form' | 'otp'
+  const [otp, setOtp] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -35,20 +39,59 @@ function Registration() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Step 1: send OTP to email (pre-registration)
   const handleRegister = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
-      setLoading(false);
       return;
     }
 
     try {
+      setOtpLoading(true);
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+      const resp = await fetch(`${API_BASE}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email }),
+      });
+      const jd = await resp.json();
+      if (!resp.ok) {
+        setError(jd.message || 'Failed to send OTP');
+        setOtpLoading(false);
+        return;
+      }
+      setOtpSent(true);
+      setStep('otp');
+      setOtpLoading(false);
+    } catch (err) {
+      setError('Connection error. Please try again.');
+      setOtpLoading(false);
+    }
+  };
 
+  // Step 2: verify OTP then submit registration
+  const handleVerifyOtpAndSubmit = async () => {
+    setError("");
+    setOtpLoading(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+      const vresp = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp }),
+      });
+      const vjson = await vresp.json();
+      if (!vresp.ok) {
+        setError(vjson.message || 'OTP verification failed');
+        setOtpLoading(false);
+        return;
+      }
+
+      // OTP verified — now submit registration to existing API
+      setLoading(true);
       const response = await fetch(`${API_BASE}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -70,10 +113,10 @@ function Registration() {
       if (!response.ok) {
         setError(data.message || "Registration failed");
         setLoading(false);
+        setOtpLoading(false);
         return;
       }
 
-      // Normalize gender before storing user and notify listeners
       const normalizeGender = (val) => {
         if (!val) return "";
         const s = String(val).trim().toLowerCase();
@@ -84,14 +127,15 @@ function Registration() {
       const userToStore = { ...data.user, gender: normalizeGender(data.user.gender) };
       localStorage.setItem("token", data.user.token);
       localStorage.setItem("user", JSON.stringify(userToStore));
-      // keep both keys to be safe (some code reads `role`, others `userRole`)
       localStorage.setItem("role", data.user.role);
       localStorage.setItem("userRole", data.user.role);
       try { window.dispatchEvent(new Event('userUpdated')); } catch (e) { /* ignore */ }
 
       navigate("/");
     } catch (err) {
-      setError("Connection error. Please try again.");
+      setError('Connection error. Please try again.');
+    } finally {
+      setOtpLoading(false);
       setLoading(false);
     }
   };
@@ -262,9 +306,54 @@ function Registration() {
               required
             />
 
-            <button type="submit" className="register-btn" disabled={loading}>
-              {loading ? "Registering..." : "Register"}
-            </button>
+            {step === 'form' && (
+              <button type="submit" className="register-btn" disabled={otpLoading}>
+                {otpLoading ? "Sending OTP..." : "Register"}
+              </button>
+            )}
+
+            {step === 'otp' && (
+              <div className="otp-actions">
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  className="otp-input-field"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0,6))}
+                />
+                <button
+                  type="button"
+                  className="verify-btn"
+                  onClick={handleVerifyOtpAndSubmit}
+                  disabled={otpLoading || loading}
+                >
+                  {otpLoading ? 'Verifying...' : 'Verify & Register'}
+                </button>
+                <button
+                  type="button"
+                  className="resend-btn"
+                  onClick={async () => {
+                    // resend OTP
+                    setError('');
+                    setOtpLoading(true);
+                    try {
+                      const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+                      const resp = await fetch(`${API_BASE}/api/auth/send-otp`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: formData.email }),
+                      });
+                      const jd = await resp.json();
+                      if (!resp.ok) setError(jd.message || 'Failed to resend OTP');
+                    } catch (e) {
+                      setError('Connection error. Please try again.');
+                    } finally { setOtpLoading(false); }
+                  }}
+                >
+                  {otpLoading ? 'Sending...' : 'Resend OTP'}
+                </button>
+              </div>
+            )}
           </form>
 
           <p className="login-text" color="gray">
