@@ -38,6 +38,25 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* make card a positioned container for floating button */
+.class-card { position: relative; }
+
+/* Floating Join Meet button */
+.join-meet-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  background-color: #16a34a; /* green */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(22, 163, 74, 0.15);
+}
+.join-meet-btn:hover { background-color: #15803d; }
+
 .highlighted-reminder {
   animation: highlightPulse 1.6s ease-in-out infinite;
   box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
@@ -239,6 +258,39 @@ body {
 .dark .class-card p,
 .dark .class-card span {
   color: #000 !important;
+}
+
+/* Top-right action pill group (Edit / Delete / Remind) */
+.card-actions {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  z-index: 5;
+}
+.action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(16,24,40,0.08);
+  border: none;
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.action-pill.edit { background: linear-gradient(180deg,#2b6cb0,#2563eb); }
+.action-pill.remind { background: linear-gradient(180deg,#2563eb,#1e40af); }
+.action-pill.delete { background: linear-gradient(180deg,#ef4444,#dc2626); }
+
+@media (max-width: 576px) {
+  .card-actions { position: static; margin-bottom: 12px; flex-wrap: wrap; }
+  .class-card { padding-top: 12px; }
 }
 
 /* Dark mode styles for Add Event modal */

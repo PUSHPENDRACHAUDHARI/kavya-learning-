@@ -48,10 +48,8 @@ export async function getEvents() {
   return res.json();
 }
 
-// Get shared events created by instructors/admins; optional dateStr (YYYY-MM-DD)
-export async function getSharedEvents(dateStr) {
-  const url = dateStr ? `${BASE}/shared-events?date=${encodeURIComponent(dateStr)}` : `${BASE}/shared-events`;
-  const res = await fetch(`${BASE}/shared-events${dateStr ? `?date=${encodeURIComponent(dateStr)}` : ''}`, { headers: authHeaders() });
+export async function getMyEvents() {
+  const res = await fetch(`${BASE}/events/my-events`, { headers: authHeaders() });
   return res.json();
 }
 
@@ -317,6 +315,7 @@ export default {
   getEvents,
   getEventsByDate,
   createEvent,
+  getMyEvents,
   getProfile,
   getProgressOverview,
   getRecentActivity,

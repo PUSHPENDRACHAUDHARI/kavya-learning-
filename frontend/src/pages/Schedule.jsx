@@ -1,4 +1,5 @@
-import { useState, useMemo,useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { io as ioClient } from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
 import { Calendar, Bell } from "lucide-react";
 import "../assets/schedule.css";
@@ -22,10 +23,32 @@ const getStudentsText = (evt) => {
   }
 };
 
+// Normalize instructor display name from different event shapes
+const getInstructorName = (evt) => {
+  try {
+    if (!evt) return 'TBD';
+    // prefer free-text instructorName saved on event
+    if (evt.instructorName) return evt.instructorName;
+    // if instructor is a string (free text) use it
+    if (typeof evt.instructor === 'string' && evt.instructor.trim()) return evt.instructor;
+    // if instructor is populated object use fullName/name/email
+    if (evt.instructor && (evt.instructor.fullName || evt.instructor.name || evt.instructor.email)) return (evt.instructor.fullName || evt.instructor.name || evt.instructor.email);
+    // if createdByUser info is available as object, use that
+    if (evt.createdByUser && (evt.createdByUser.fullName || evt.createdByUser.name || evt.createdByUser.email)) return (evt.createdByUser.fullName || evt.createdByUser.name || evt.createdByUser.email);
+    // sometimes createdByUserId is populated as object
+    if (evt.createdByUserId && typeof evt.createdByUserId === 'object' && (evt.createdByUserId.fullName || evt.createdByUserId.name || evt.createdByUserId.email)) return (evt.createdByUserId.fullName || evt.createdByUserId.name || evt.createdByUserId.email);
+    // last resort: createdByUserName or createdByName string if present
+    if (evt.createdByUserName) return evt.createdByUserName;
+    if (evt.createdByName) return evt.createdByName;
+    return 'TBD';
+  } catch (err) { return 'TBD'; }
+}
+
 function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEdit }) {
   const [form, setForm] = useState({
     title: "",
-    instructor: "",
+      instructor: "", // This line remains unchanged
+    instructorName: "",
     course: "",
     type: "Live Class",
     date: "",
@@ -60,7 +83,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     if (eventToEdit && isOpen) {
       setForm({
         title: eventToEdit.title || "",
-        instructor: eventToEdit.instructor || "",
+          instructor: eventToEdit.instructor || "", // This line remains unchanged
+        instructorName: eventToEdit.instructorName || "",
         course: eventToEdit.course || "",
         type: eventToEdit.type || "Live Class",
         date: eventToEdit.date || "",
@@ -95,19 +119,20 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         setLoadingInstructors(false);
       }
       // Fetch instructor's courses when modal opens (instructor role)
-      try {
-        setLoadingCourses(true);
-        const r = await axiosClient.get('/api/instructor/courses');
-        const data = r.data && (r.data.data || r.data) ? (r.data.data || r.data) : [];
-        setCourses(Array.isArray(data) ? data : []);
-        setCoursesError(null);
-      } catch (err) {
-        console.warn('Failed to load instructor courses', err.message || err);
-        setCourses([]);
-        setCoursesError('Unable to load courses');
-      } finally {
-        setLoadingCourses(false);
-      }
+        // load courses: try general courses endpoint first (admins), fallback to instructor-specific
+        (async () => {
+          try {
+            const res = await axiosClient.get('/api/courses');
+            setCourses(res.data.courses || []);
+          } catch (err) {
+            try {
+              const res2 = await axiosClient.get('/api/instructor/courses');
+              setCourses(res2.data.courses || []);
+            } catch (err2) {
+              setCourses([]);
+            }
+          }
+        })();
     })();
   }, [presetDate, isOpen, eventToEdit]);
 
@@ -172,7 +197,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     const timeRange = `${form.startTime} ${form.startPeriod} - ${form.endTime} ${form.endPeriod}`;
     const newEvent = userRole === 'student' ? {
       title: form.title,
-      instructor: form.instructor,
+         instructor: form.instructorName || form.instructor,
       type: form.type,
       date: form.date,
       startTime: `${form.startTime} ${form.startPeriod}`,
@@ -188,6 +213,12 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       type: form.type,
       meetLink: form.meetLink || null,
     };
+    // If admin provided a free-text instructorName prefer that
+    if ((userRole === 'admin' || userRole === 'sub-admin') && form.instructorName) {
+      newEvent.instructorName = form.instructorName;
+    } else if (form.instructor) {
+      newEvent.instructor = form.instructor;
+    }
  
     // Try to save to backend; fall back to local update on failure
     (async () => {
@@ -223,7 +254,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                 try {
                   await axiosClient.post('/api/shared-events', {
                     title: res.title,
-                    instructor: (res.instructor && (res.instructor._id || res.instructor)) || form.instructor || null,
+                    instructor: res.instructorName || (res.instructor && (res.instructor._id || res.instructor)) || form.instructorName || form.instructor || null,
                     course: res.course || form.course || null,
                     date: res.date || form.date,
                     startTime: res.startTime || `${form.startTime} ${form.startPeriod}`,
@@ -244,7 +275,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
 
           onAdd({
             title: res.title,
-            instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || form.instructor,
+             instructor: res.instructorName || (res.instructor && (res.instructor.fullName || res.instructor.email)) || form.instructorName || form.instructor || null,
             createdByUserId: res.createdByUserId && (res.createdByUserId._id || res.createdByUserId) ? (res.createdByUserId._id || res.createdByUserId).toString() : null,
             createdByRole: res.createdByRole || null,
             date: res.date ? new Date(res.date).toLocaleDateString() : form.date,
@@ -266,7 +297,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
             try {
               const rShared = await axiosClient.post('/api/shared-events', {
                 title: newEvent.title,
-                instructor: newEvent.instructor || form.instructor || null,
+                instructor: newEvent.instructorName || newEvent.instructor || form.instructorName || form.instructor || null,
                 course: newEvent.course || form.course || null,
                 date: newEvent.date || form.date,
                 startTime: newEvent.startTime || `${form.startTime} ${form.startPeriod}`,
@@ -449,6 +480,16 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
             <div className="col-md-6">
               <label className="form-label">Instructor</label>
               <div className="position-relative">
+                {/* For admins allow typing a free-text instructor name */}
+                {(userRole === 'admin' || userRole === 'sub-admin') && (
+                  <input
+                    name="instructorName"
+                    value={form.instructorName}
+                    onChange={handleChange}
+                    className="form-control mb-2"
+                    placeholder="Type instructor name (optional)"
+                  />
+                )}
                 <input
                   type="text"
                   value={instructorSearch}
@@ -680,6 +721,8 @@ function Schedule() {
   // Background-sync storage key for locally-created events
   const LOCAL_EVENTS_KEY = 'schedule_local_events_v1';
 
+  const latestUpcomingFetchId = useRef(0);
+
   // Define weekStart early so it's available for effects
   const weekStart = useMemo(() => {
     const date = new Date(currentDate);
@@ -741,19 +784,23 @@ function Schedule() {
           console.warn('Failed to load shared events', e && e.message ? e.message : e);
         }
         if (Array.isArray(events) && userProfile && userProfile._id) {
-          // Filter events to those where the user is the instructor or is enrolled
+          // Admins should see all events. Non-admins only see events where they are instructor or enrolled.
           const uid = userProfile._id;
-          const filtered = events.filter(e => {
+          const isAdmin = (userProfile.role === 'admin' || userProfile.role === 'sub-admin' || userRole === 'admin' || userRole === 'sub-admin');
+          const filtered = isAdmin ? events : events.filter(e => {
             const instr = e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor) : null;
             const enrolled = Array.isArray(e.enrolledStudents) ? e.enrolledStudents.map(x => x.toString()) : [];
-            return (instr && instr.toString() === uid.toString()) || enrolled.includes(uid.toString());
+            const createdByRole = e.createdByRole || (e.createdBy && e.createdBy.role) || null;
+            // Students should see events they are enrolled in, events they teach, and events created by instructors/admins
+            const publicByInstructorOrAdmin = createdByRole === 'instructor' || createdByRole === 'admin' || createdByRole === 'sub-admin';
+            return publicByInstructorOrAdmin || (instr && instr.toString() === uid.toString()) || enrolled.includes(uid.toString());
           });
 
           // Merge backend events + shared events, de-duping by _id when available
           const backendTransformed = filtered.map((e) => ({
             time: e.startTime || 'TBD',
             title: e.title,
-            instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
+            instructor: getInstructorName(e),
             createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
             createdByRole: e.createdByRole || null,
             date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
@@ -761,13 +808,14 @@ function Schedule() {
             students: getStudentsText(e),
             type: e.type || 'Live Class',
             status: e.status || 'Scheduled',
+            meetLink: e.meetLink || null,
             _id: e._id
           }));
 
           const sharedTransformed = (shared || []).map(se => ({
             time: se.startTime || 'TBD',
             title: se.title,
-            instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || form.instructor || 'TBD',
+            instructor: getInstructorName(se),
             createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
             createdByRole: se.createdByRole || null,
             date: se.date ? new Date(se.date).toLocaleDateString() : 'TBD',
@@ -775,6 +823,7 @@ function Schedule() {
             students: getStudentsText(se),
             type: se.type || 'Live Class',
             status: se.status || 'Scheduled',
+            meetLink: se.meetLink || null,
             _id: se._id
           }));
 
@@ -941,6 +990,85 @@ function Schedule() {
   useEffect(() => {
     computeWeeklyStats();
   }, [classes, weekStart, userProfile]);
+
+  // Load events for the current week and populate `classes` so the side-panel stats and week view work
+  const fetchWeekEvents = async () => {
+    try {
+      const api = await import('../api');
+      const all = await api.getEvents();
+      if (!Array.isArray(all)) {
+        setClasses([]);
+        return;
+      }
+
+      const start = new Date(weekStart);
+      start.setHours(0,0,0,0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+
+      const uid = userProfile && (userProfile._id || userProfile.id) ? (userProfile._id || userProfile.id).toString() : null;
+  // Normalize role values to avoid casing/format issues and compute admin flag
+  const role = (userProfile && (userProfile.role || userRole)) || userRole || 'student';
+  const roleLower = (role || '').toString().toLowerCase();
+  const isAdmin = roleLower === 'admin' || roleLower === 'sub-admin';
+
+      const filtered = all.filter(e => {
+        try {
+          if (!e || !e.date) return false;
+          const d = new Date(e.date);
+          d.setHours(0,0,0,0);
+          if (isNaN(d)) return false;
+          if (d < start || d > end) return false;
+
+          if (isAdmin) return true;
+
+          // instructor: show if instructor matches user or event is public
+          const instrId = e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null;
+          const enrolled = Array.isArray(e.enrolledStudents) ? e.enrolledStudents.map(x => x.toString()) : [];
+          if (role === 'instructor') {
+            if (instrId && uid && instrId === uid) return true;
+            if (e.createdByRole && (e.createdByRole === 'admin' || e.createdByRole === 'instructor' || e.createdByRole === 'sub-admin')) return true;
+            return false;
+          }
+
+          // student/parent: show if enrolled or public or course matches enrolledCourses
+          if (enrolled.includes(uid)) return true;
+          if (e.createdByRole && (e.createdByRole === 'admin' || e.createdByRole === 'instructor' || e.createdByRole === 'sub-admin')) return true;
+          // course-based visibility (if profile lists enrolledCourses)
+          const evtCourse = e.course && (e.course._id || e.course) ? (e.course._id || e.course).toString() : null;
+          const enrolledCourseIds = (userProfile && Array.isArray(userProfile.enrolledCourses)) ? userProfile.enrolledCourses.map(ec => (ec.course || ec).toString()) : [];
+          if (evtCourse && enrolledCourseIds.length && enrolledCourseIds.includes(evtCourse)) return true;
+
+          return false;
+        } catch (err) { return false; }
+      });
+
+      const mapped = filtered.map(e => ({
+      title: e.title,
+      instructor: getInstructorName(e),
+        instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+        createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+        createdByRole: e.createdByRole || null,
+        date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
+        time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
+        location: e.location || 'Online',
+        students: getStudentsText(e),
+        type: e.type || 'Live Class',
+        status: e.status || 'Scheduled',
+        meetLink: e.meetLink || null,
+        _id: e._id
+      }));
+
+      setClasses(mapped);
+    } catch (err) {
+      console.warn('Failed to load weekly events', err.message || err);
+      setClasses([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchWeekEvents();
+  }, [weekStart, userProfile, userRole]);
  
   const todaySchedule = [
     {
@@ -1067,7 +1195,7 @@ function Schedule() {
         const backend = Array.isArray(events) ? events.map((e) => ({
           time: e.startTime || 'TBD',
           title: e.title,
-          instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
+          instructor: getInstructorName(e),
           instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
           createdByRole: e.createdByRole || null,
@@ -1082,7 +1210,7 @@ function Schedule() {
         const sharedTransformed = Array.isArray(shared) ? shared.map(se => ({
           time: se.startTime || 'TBD',
           title: se.title,
-          instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || 'TBD',
+          instructor: getInstructorName(se),
           instructorId: se.instructor && (se.instructor._id || se.instructor) ? (se.instructor._id || se.instructor).toString() : null,
           createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
           createdByRole: se.createdByRole || null,
@@ -1109,6 +1237,14 @@ function Schedule() {
 
   // Fetch upcoming classes for the logged-in user and refresh periodically
   const fetchUpcomingClasses = async () => {
+    // Wait for authenticated profile before fetching user-specific upcoming classes
+    if (!userProfile || !userProfile._id) {
+      console.warn('Skipping fetchUpcomingClasses until user profile is ready');
+      return;
+    }
+
+    const fetchId = ++latestUpcomingFetchId.current;
+
     try {
       const api = await import('../api');
       const res = await api.getUpcomingClasses(20, 1);
@@ -1116,7 +1252,7 @@ function Schedule() {
         setUpcomingCount(res.upcomingCount || 0);
         const mapped = (res.upcoming || []).map((e) => ({
           title: e.title,
-          instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+              instructor: getInstructorName(e),
           instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
           createdByRole: e.createdByRole || null,
@@ -1127,6 +1263,7 @@ function Schedule() {
           students: getStudentsText(e),
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
+          meetLink: e.meetLink || null,
           _id: e._id
         })).filter(e => {
           // Filter out events based on deletion permissions
@@ -1141,6 +1278,36 @@ function Schedule() {
           // If deleted by admin: nobody sees it (shouldn't happen as admin hard-deletes)
           return false;
         });
+        // If the current user is an instructor (or admin), also include events returned
+        // by the ``/api/events/my-events`` endpoint so instructor-created events
+        // are visible across browsers/sessions.
+        let instructorMapped = [];
+        try {
+          const role = (userProfile && (userProfile.role || userRole)) || userRole;
+          if (role === 'instructor' || role === 'admin' || role === 'sub-admin') {
+            const my = await api.getMyEvents();
+            if (Array.isArray(my)) {
+              instructorMapped = my.map((e) => ({
+                title: e.title,
+                  instructor: getInstructorName(e),
+                instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+                createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+                createdByRole: e.createdByRole || null,
+                deletedByRole: e.deletedByRole || null,
+                date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
+                time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
+                location: e.location || 'Online',
+                students: getStudentsText(e),
+                type: e.type || 'Live Class',
+                status: e.status || 'Scheduled',
+                meetLink: e.meetLink || null,
+                _id: e._id
+              }));
+            }
+          }
+        } catch (err) {
+          // ignore instructor-specific fetch failures
+        }
         // Preserve any locally-created events that haven't expired.
         // If the server returns a duplicate (same title+date+time) but the local
         // copy is the creator's local copy (has _local + createdByUserId equal
@@ -1169,7 +1336,9 @@ function Schedule() {
 
         // Add any valid local items that don't have a server duplicate
         const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
-        setUpcomingClasses([...merged, ...localOnly]);
+        if (fetchId !== latestUpcomingFetchId.current) return;
+        const mergedFinal = mergeIncomingWithLocal(merged.concat(instructorMapped).concat(localOnly));
+        setUpcomingClasses(mergedFinal);
         
         // Fetch reminders from backend notifications
         await fetchRemindersFromBackend();
@@ -1190,7 +1359,7 @@ function Schedule() {
             } catch (e) { return true; }
           }).map(se => ({
             title: se.title,
-            instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || 'TBD',
+            instructor: getInstructorName(se),
             instructorId: se.instructor && (se.instructor._id || se.instructor) ? (se.instructor._id || se.instructor).toString() : null,
             createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
             createdByRole: se.createdByRole || null,
@@ -1204,6 +1373,7 @@ function Schedule() {
           }));
 
           // Merge with existing upcomingClasses, dedupe by eventKey/_id
+          if (fetchId !== latestUpcomingFetchId.current) return;
           setUpcomingClasses(prev => {
             const existing = Array.isArray(prev) ? prev : [];
             const map = new Map();
@@ -1221,7 +1391,7 @@ function Schedule() {
       if (Array.isArray(res)) {
         const mapped = res.map((e) => ({
           title: e.title,
-          instructor: e.instructor && (e.instructor.fullName || e.instructor.email) || 'TBD',
+          instructor: getInstructorName(e),
           instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
           date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
           time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
@@ -1232,32 +1402,56 @@ function Schedule() {
           _id: e._id
         }));
 
-        // Preserve any locally-created events that haven't expired and are not duplicated by server
+        // Preserve any locally-created events (stored or in-memory) that haven't expired and are not duplicated by server
         const now = Date.now();
         const storedLocal = loadLocalEventsFromStorage();
-        const localKeep = (storedLocal || []).filter(l => l && l._local).filter(l => {
+        const inMemoryLocal = (upcomingClasses || []).filter(l => l && l._local);
+        const combinedLocal = (storedLocal || []).concat(inMemoryLocal || []);
+        const validLocal = (combinedLocal || []).filter(l => l && l._local).filter(l => {
           try {
             if (!l.localExpiresAt) return true;
             return new Date(l.localExpiresAt).getTime() > now;
           } catch (err) { return true; }
-        }).filter(local => {
-          return !mapped.some(m => m.title === local.title && m.date === local.date && m.time === local.time);
         });
 
-        setUpcomingCount((mapped.length || 0) + localKeep.length);
-        setUpcomingClasses([...mapped, ...localKeep]);
+        // Use eventKey to detect duplicates robustly
+        const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
+
+        // Prefer local creator copies when a server item exists with same key
+        const localMap = new Map((validLocal || []).map(l => [eventKey(l), l]));
+        const merged = mapped.map(m => {
+          try {
+            const key = eventKey(m);
+            const match = localMap.get(key);
+            if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
+              return { ...match };
+            }
+          } catch (err) { /* ignore and fall back to server item */ }
+          return m;
+        });
+
+        const finalList = [...merged, ...localOnly];
+        if (fetchId !== latestUpcomingFetchId.current) return;
+        const mergedFinal = mergeIncomingWithLocal(finalList);
+        setUpcomingCount(mergedFinal.length || 0);
+        setUpcomingClasses(mergedFinal);
 
         // Fetch reminders from backend notifications
         await fetchRemindersFromBackend();
         return;
       }
 
-      setUpcomingCount(0);
-      setUpcomingClasses([]);
+      // Server didn't return structured upcoming events; preserve any local events
+      const storedLocal = loadLocalEventsFromStorage();
+      const inMemoryLocal = (upcomingClasses || []).filter(l => l && l._local);
+      const validLocal = (storedLocal || []).concat(inMemoryLocal || []).filter(l => l && l._local);
+      if (fetchId !== latestUpcomingFetchId.current) return;
+      const mergedFinal = mergeIncomingWithLocal(validLocal || []);
+      setUpcomingCount(mergedFinal.length || 0);
+      setUpcomingClasses(mergedFinal);
     } catch (err) {
       console.warn('Failed to fetch upcoming classes', err.message || err);
-      setUpcomingCount(0);
-      setUpcomingClasses([]);
+      // Do not clear UI state on transient errors; keep whatever user already sees.
     }
   };
 
@@ -1299,6 +1493,45 @@ function Schedule() {
       return `${t}|${d}|${ti}`;
     } catch (err) { return `${(e.title||'').toString()}`; }
   };
+    // Merge an incoming list of events with locally-stored `_local` events.
+    const mergeIncomingWithLocal = (incoming) => {
+      try {
+        const now = Date.now();
+        const storedLocal = loadLocalEventsFromStorage();
+        const inMemoryLocal = (upcomingClasses || []).filter(l => l && l._local);
+        const combinedLocal = (storedLocal || []).concat(inMemoryLocal || []);
+        const validLocal = (combinedLocal || []).filter(l => l && l._local).filter(l => {
+          try {
+            if (!l.localExpiresAt) return true;
+            return new Date(l.localExpiresAt).getTime() > now;
+          } catch (err) { return true; }
+        });
+
+        const map = new Map();
+        (incoming || []).forEach(it => {
+          try {
+            if (it && it._id) map.set(it._id.toString(), it);
+            else map.set(eventKey(it), it);
+          } catch (e) { /* ignore */ }
+        });
+
+        // Prefer local creator copies for duplicates, and include local-only items
+        validLocal.forEach(l => {
+          try {
+            const key = l._id ? l._id.toString() : eventKey(l);
+            const existing = map.get(key);
+            if (!existing) map.set(key, l);
+            else if (l._local && userProfile && userProfile._id && l.createdByUserId && l.createdByUserId.toString() === userProfile._id.toString()) {
+              map.set(key, l);
+            }
+          } catch (err) { /* ignore */ }
+        });
+
+        return Array.from(map.values());
+      } catch (err) {
+        return incoming || [];
+      }
+    };
   const loadLocalEventsFromStorage = () => {
     try {
       const raw = window.localStorage.getItem(LOCAL_EVENTS_KEY);
@@ -1389,7 +1622,9 @@ function Schedule() {
             // map server event to display format
             const serverEvt = {
               title: res.title,
-                instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || ev.instructor,
+                    instructor: (res.instructor && (res.instructor.fullName || res.instructor.email))
+                      || (res.createdByUserId && (res.createdByUserId.fullName || res.createdByUserId.email))
+                      || ev.instructor,
                 instructorId: res.instructor && (res.instructor._id || res.instructor) ? (res.instructor._id || res.instructor).toString() : (ev.instructorId || null),
                 createdByUserId: res.createdByUserId && (res.createdByUserId._id || res.createdByUserId) ? (res.createdByUserId._id || res.createdByUserId).toString() : (ev.createdByUserId || null),
                 createdByRole: res.createdByRole || ev.createdByRole || null,
@@ -1476,19 +1711,74 @@ function Schedule() {
     setIsAddOpen(true);
   };
 
+  // Real-time: listen for event changes via WebSocket and update UI
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const socketUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socket = ioClient(socketUrl, { transports: ['websocket', 'polling'] });
+
+    const removeEventById = (id) => {
+      try {
+        setUpcomingClasses(prev => {
+          const list = (prev || []).filter(p => {
+            try { const pid = p && p._id ? (p._id.toString ? p._id.toString() : p._id) : null; return pid !== id; } catch (e) { return true; }
+          });
+          try { setUpcomingCount(list.length || 0); } catch (e) {}
+          return list;
+        });
+        setClasses(prev => (prev || []).filter(c => {
+          try { const cid = c && c._id ? (c._id.toString ? c._id.toString() : c._id) : null; return cid !== id; } catch (e) { return true; }
+        }));
+        // Remove from local storage if present
+        removeLocalEventFromStorage({ _id: id });
+      } catch (err) { console.warn('Failed to remove event from UI', err); }
+    };
+
+    socket.on('connect', () => {
+      socket.emit('auth', token);
+    });
+
+    socket.on('event:deleted', (payload) => {
+      try {
+        const id = payload && payload._id ? payload._id.toString() : null;
+        if (id) removeEventById(id);
+      } catch (e) { console.warn('Invalid event:deleted payload', e); }
+    });
+
+    socket.on('events:changed', (payload) => {
+      try {
+        if (!payload) return;
+        if (payload.action === 'deleted' && payload._id) {
+          removeEventById(payload._id.toString());
+        }
+        if (payload.action === 'updated' && payload._id) {
+          // simple approach: refetch upcoming classes to refresh updated event
+          (async () => { try { const api = await import('../api'); await fetchUpcomingClasses(); } catch (e) {} })();
+        }
+      } catch (e) { console.warn('Invalid events:changed payload', e); }
+    });
+
+    return () => { try { socket.disconnect(); } catch (e) {} };
+  }, []);
+
   const handleDeleteEvent = async (evt) => {
     try {
       if (!evt) return;
       // If event exists on server, request deletion
       if (evt._id) {
         const token = localStorage.getItem('token');
-        const res = await fetch(`/api/events/${evt._id}`, {
+        const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+        const url = API_BASE ? `${API_BASE.replace(/\/$/, '')}/api/events/${evt._id}` : `/api/events/${evt._id}`;
+
+        const res = await fetch(url, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
             Authorization: token ? `Bearer ${token}` : undefined,
           },
         });
+
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           alert(data.message || 'Failed to delete event');
@@ -1496,11 +1786,34 @@ function Schedule() {
         }
       }
 
-      // Remove locally (from state and localStorage)
-      setUpcomingClasses(prev => (prev || []).filter(p => !(p._id && evt._id && p._id === evt._id) && !(p.title === evt.title && p.date === evt.date && p.time === evt.time)));
-      setClasses(prev => (prev || []).filter(c => !(c._id && evt._id && c._id === evt._id) && !(c.title === evt.title && c.date === evt.date && c.time === evt.time)));
+      // Remove locally (from state and localStorage) using normalized id comparison
+      setUpcomingClasses(prev => {
+        const list = (prev || []).filter(p => {
+          try {
+            const pid = p && p._id ? (p._id.toString ? p._id.toString() : p._id) : null;
+            const eid = evt && evt._id ? (evt._id.toString ? evt._id.toString() : evt._id) : null;
+            if (pid && eid) return pid !== eid;
+            // fallback to title/date/time match
+            return !(p.title === evt.title && p.date === evt.date && p.time === evt.time);
+          } catch (err) { return true; }
+        });
+        try { setUpcomingCount(list.length || 0); } catch (e) {}
+        return list;
+      });
+
+      setClasses(prev => {
+        const list = (prev || []).filter(c => {
+          try {
+            const cid = c && c._id ? (c._id.toString ? c._id.toString() : c._id) : null;
+            const eid = evt && evt._id ? (evt._id.toString ? evt._id.toString() : evt._id) : null;
+            if (cid && eid) return cid !== eid;
+            return !(c.title === evt.title && c.date === evt.date && c.time === evt.time);
+          } catch (err) { return true; }
+        });
+        return list;
+      });
+
       removeLocalEventFromStorage(evt);
-      setUpcomingCount(c => Math.max(0, (c || 0) - 1));
     } catch (err) {
       console.warn('Failed to delete event', err);
       alert('Failed to delete event: ' + (err.message || err));
@@ -1570,6 +1883,9 @@ function Schedule() {
   };
 
   useEffect(() => {
+    // Only start periodic fetching once the authenticated profile is available
+    if (!userProfile || !userProfile._id) return;
+
     fetchUpcomingClasses();
     fetchRemindersFromBackend();
     const interval = setInterval(() => {
@@ -1591,7 +1907,7 @@ function Schedule() {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('reminderSet', onReminderSet);
     };
-  }, []);
+  }, [userProfile]);
 
   // Read query param when navigated from a notification and set highlight
   useEffect(() => {
@@ -1867,28 +2183,7 @@ function Schedule() {
                         Remind
                       </button>
                     )}
-                    {classItem.meetLink ? (
-                      <button
-                        className="btn btn-info btn-sm d-flex align-items-center gap-1"
-                        onClick={async () => {
-                          try {
-                            // Record attendance for this event (instructor endpoint expects auth)
-                            await axiosClient.post(`/api/attendance/events/${classItem._id}/record`);
-                          } catch (err) {
-                            // don't block join on errors; just log
-                            console.warn('Failed to record attendance', err?.response?.data || err.message || err);
-                          } finally {
-                            window.open(classItem.meetLink, '_blank');
-                          }
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M23 7l-7 5 7 5V7z"/>
-                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                        </svg>
-                        Join Meet
-                      </button>
-                    ) : null}
+                    {/* Join button moved to bottom-right of card for clearer layout */}
                   </div>
                 </div>
 
@@ -1955,6 +2250,25 @@ function Schedule() {
 
                   <span className={`schedule-badge`}>{classItem.type}</span>
                 </div>
+
+                {/* Floating Join Meet button at bottom-right of card */}
+                {classItem.meetLink ? (
+                  <button
+                    className="join-meet-btn"
+                    onClick={async () => {
+                      try {
+                        // Try to record attendance; don't block join on failure
+                        await axiosClient.post(`/api/attendance/events/${classItem._id}/record`).catch(() => {});
+                      } catch (err) {
+                        console.warn('Failed to record attendance', err?.response?.data || err.message || err);
+                      } finally {
+                        window.open(classItem.meetLink, '_blank');
+                      }
+                    }}
+                  >
+                    Join Meet
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
