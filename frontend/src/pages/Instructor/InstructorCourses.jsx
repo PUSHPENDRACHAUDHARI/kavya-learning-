@@ -208,6 +208,11 @@ const InstructorCourses = () => {
     navigate(`/instructor/lessons?courseId=${courseId}`);
   };
 
+  const handleManageLiveSessions = (courseId) => {
+    // Navigate to live sessions management page for this course
+    navigate(`/instructor/live-sessions/${courseId}`);
+  };
+
   if (loading) {
     return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div></AppLayout>;
   }
@@ -401,6 +406,12 @@ const InstructorCourses = () => {
                         style={{ padding: '6px 10px', marginRight: '5px', background: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                       >
                         Lessons
+                      </button>
+                      <button 
+                        onClick={() => handleManageLiveSessions(course._id)}
+                        style={{ padding: '6px 10px', marginRight: '5px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Live Sessions
                       </button>
                       <button 
                         onClick={() => handleDelete(course._id)}

@@ -132,6 +132,7 @@ const searchRoutes = require('./routes/searchRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const sharedEventsRoutes = require('./routes/sharedEventsRoutes');
+const liveSessionRoutes = require('./routes/liveSessionRoutes');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -157,6 +158,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/shared-events', sharedEventsRoutes);
+app.use('/api/live-sessions', liveSessionRoutes);
 
 // Ensure uploads folder exists and serve statically so uploaded PDFs are accessible
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -258,6 +260,7 @@ try {
   setIo(io);
   // attach socket handlers
   require('./sockets/messageSocket')(io);
+  require('./sockets/liveSessionSocket')(io);
   console.log('➡️ Socket.IO initialized');
 } catch (err) {
   console.warn('Socket.IO not initialized:', err?.message || err);

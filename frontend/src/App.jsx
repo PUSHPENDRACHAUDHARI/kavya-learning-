@@ -38,6 +38,7 @@ import InstructorStudents from './pages/Instructor/InstructorStudents';
 import InstructorLessons from './pages/Instructor/InstructorLessons';
 import InstructorAnalytics from './pages/Instructor/InstructorAnalytics';
 import InstructorAttendance from './pages/Instructor/InstructorAttendance';
+import CourseLiveSessions from './pages/Instructor/CourseLiveSessions';
 // Student Pages
 import StudentDashboard from './pages/Student/StudentDashboard';
 import StudentCourses from './pages/Student/StudentCourses';
@@ -46,6 +47,7 @@ import StudentAchievements from './pages/Student/StudentAchievements';
 import StudentActivity from './pages/Student/StudentActivity';
 import StudentNotes from './pages/Student/StudentNotes';
 import Blocked from './pages/Blocked';
+import LiveClassPage from './pages/LiveClassPage';
 // Parent Pages
 import ParentDashboard from './pages/Parent/ParentDashboard';
 import StudentReport from './pages/Parent/StudentReport';
@@ -119,6 +121,7 @@ function Layout() {
           <Route path="/instructor/analytics" element={<ProtectedRoute requireRole="instructor"><InstructorAnalytics /></ProtectedRoute>} />
           <Route path="/instructor/announcements" element={<ProtectedRoute requireRole="instructor"><InstructorAnnouncements /></ProtectedRoute>} />
           <Route path="/instructor/attendance" element={<ProtectedRoute requireRole="instructor"><InstructorAttendance /></ProtectedRoute>} />
+          <Route path="/instructor/live-sessions/:courseId" element={<ProtectedRoute requireRole="instructor"><CourseLiveSessions /></ProtectedRoute>} />
 
           {/* Student Routes */}
           <Route path="/dashboard" element={<ProtectedRoute requireRole="student"><Dashboard /></ProtectedRoute>} />
@@ -143,6 +146,7 @@ function Layout() {
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/reset-password" element={<Login />} />
+          <Route path="/live-class/:sessionId" element={<ProtectedRoute><LiveClassPage /></ProtectedRoute>} />
 
           {/* Blocked page for users who are blocked by admin */}
           <Route path="/blocked" element={<Blocked />} />
