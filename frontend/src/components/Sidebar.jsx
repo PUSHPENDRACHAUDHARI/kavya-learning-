@@ -112,7 +112,6 @@ function Sidebar({ isOpen, setIsOpen }) {
       { path: "/admin/announcements", label: "Announcements", icon: <MdAnnouncement /> },
       { path: "/admin/lessons", label: "Manage Lessons", icon: <MdAutoStories /> },
       { path: "/admin/students", label: "Manage Students", icon: <MdPerson /> },
-      { path: "/admin/parents", label: "Manage Parents", icon: <MdFamilyRestroom /> },
       { path: "/admin/instructors", label: "Manage Instructors", icon: <MdCastForEducation /> },
       { path: "/admin/courses", label: "Manage Courses", icon: <AiOutlineBook /> },
       { path: "/admin/notes", label: "Notes", icon: <LuGalleryHorizontalEnd /> },
