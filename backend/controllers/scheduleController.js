@@ -65,19 +65,56 @@ exports.getUpcomingClasses = async (req, res) => {
     const userId = req.user.id || req.user._id;
     const now = new Date();
 
-    // Find events where the user is enrolled and the event is in the future and scheduled
-    const query = {
-      enrolledStudents: userId,
-      date: { $gte: now },
-      status: 'Scheduled',
-    };
+    // Build a role-aware query for upcoming classes
+    const role = req.user && req.user.role ? req.user.role.toString().toLowerCase() : 'student';
+    let query = { date: { $gte: now }, status: 'Scheduled' };
+
+    if (role === 'admin' || role === 'sub-admin') {
+      // Admins should see all upcoming scheduled events
+      query = { date: { $gte: now }, status: 'Scheduled' };
+    } else if (role === 'instructor') {
+      // Instructors see events where they are the instructor, they created it, or they're enrolled
+      query = {
+        $and: [
+          { date: { $gte: now } },
+          { status: 'Scheduled' },
+          {
+            $or: [
+              { instructor: userId },
+              { createdByUserId: userId },
+              { enrolledStudents: userId }
+            ]
+          }
+        ]
+      };
+    } else {
+      // Students/parents: show events they're enrolled in OR events created by admin/sub-admin/instructor
+      query = {
+        $and: [
+          { date: { $gte: now } },
+          { status: 'Scheduled' },
+          {
+            $or: [
+              { enrolledStudents: userId },
+              { createdByRole: { $in: ['admin', 'sub-admin', 'instructor'] } }
+            ]
+          }
+        ]
+      };
+    }
 
     const limit = parseInt(req.query.limit, 10) || 20;
     const page = parseInt(req.query.page, 10) || 1;
     const skip = (page - 1) * limit;
 
     const [events, total] = await Promise.all([
-      Event.find(query).sort({ date: 1 }).limit(limit).skip(skip).lean(),
+      Event.find(query)
+        .sort({ date: 1 })
+        .limit(limit)
+        .skip(skip)
+        .populate('instructor', 'fullName name email')
+        .populate('createdByUserId', 'fullName name email')
+        .lean(),
       Event.countDocuments(query),
     ]);
 

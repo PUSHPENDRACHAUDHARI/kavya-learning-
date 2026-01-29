@@ -1,5 +1,7 @@
 const Event = require('../models/eventModel');
 const asyncHandler = require('express-async-handler');
+const Course = require('../models/courseModel');
+const { getIo } = require('../sockets/io');
 
 // @desc    Create new event
 // @route   POST /api/events
@@ -53,22 +55,60 @@ const createEvent = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: 'endDateTime must be later than startDateTime' });
     }
 
-    const event = await Event.create({
-        title,
-        instructor: req.user._id, // From auth middleware
-        type,
-        date,
-        startTime,
-        endTime,
-        location,
-        maxStudents,
-        course,
-        meetLink,
-        createdByUserId: req.user._id,
-        createdByRole: req.user.role
-    });
+        // Allow admin to provide either an instructor ObjectId or a free-text instructorName.
+        const payload = {
+                title,
+                type,
+                date,
+                startTime,
+                endTime,
+                description: req.body.description || '',
+                location,
+                maxStudents,
+                course,
+                meetLink,
+                createdByUserId: req.user._id,
+                createdByRole: req.user.role
+        };
 
-    if (event) {
+        // If request provided instructor (id), and it looks like an ObjectId, use it.
+        const maybeInstr = req.body.instructor;
+        const maybeInstrName = req.body.instructorName || req.body.instructorName === '' ? req.body.instructorName : null;
+        const isObjectIdLike = (val) => typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val);
+
+        if (maybeInstr && isObjectIdLike(maybeInstr)) {
+            payload.instructor = maybeInstr;
+        } else if (req.user.role === 'instructor' && !maybeInstr && !maybeInstrName) {
+            // If creator is an instructor and no instructor was supplied, default to creator
+            payload.instructor = req.user._id;
+        }
+
+        // If admin supplied an instructorName (free-text), store it
+        if (maybeInstrName) {
+            payload.instructorName = maybeInstrName;
+        }
+
+        // If admin selected a course but didn't provide an instructor id or name,
+        // assign the course's instructor (so the instructor sees this event on their schedule)
+        if (payload.course && !payload.instructor && !payload.instructorName) {
+            try {
+                const courseObj = await Course.findById(payload.course).select('instructor');
+                if (courseObj && courseObj.instructor) {
+                    // courseObj.instructor may be an ObjectId or populated object
+                    payload.instructor = courseObj.instructor._id ? courseObj.instructor._id : courseObj.instructor;
+                }
+            } catch (err) {
+                // ignore lookup failures and proceed without setting instructor
+            }
+        }
+
+        const created = await Event.create(payload);
+    if (created) {
+        // Populate fields for immediate client use
+        const event = await Event.findById(created._id)
+            .populate('instructor', 'fullName email')
+            .populate('createdByUserId', 'fullName email')
+            .populate('course', 'title');
         res.status(201).json(event);
     } else {
         res.status(400);
@@ -76,14 +116,44 @@ const createEvent = asyncHandler(async (req, res) => {
     }
 });
 
-// @desc    Get all events
+// @desc    Get events (role-aware)
 // @route   GET /api/events
 // @access  Private
 const getEvents = asyncHandler(async (req, res) => {
-    const events = await Event.find({})
-        .populate('instructor', 'name email')
+    const role = (req.user && req.user.role) ? req.user.role.toString().toLowerCase() : 'student';
+    const userId = req.user && req.user._id ? req.user._id : null;
+
+    let query = {};
+
+    if (role === 'admin' || role === 'sub-admin') {
+        // Admins see all events (including ones created by any instructor)
+        query = {};
+    } else if (role === 'instructor') {
+        // Instructors see only events they created or where they are set as instructor
+        query = {
+            $and: [
+                { deletedByRole: { $ne: 'instructor' } },
+                { $or: [
+                    { instructor: userId },
+                    { createdByUserId: userId }
+                ] }
+            ]
+        };
+    } else {
+        // Students/parents: only upcoming scheduled events
+        query = {
+            date: { $gte: new Date() },
+            status: 'Scheduled',
+            deletedByRole: { $ne: 'instructor' }
+        };
+    }
+
+    const events = await Event.find(query)
+        .populate('instructor', 'fullName email')
+        .populate('createdByUserId', 'fullName email')
         .populate('course', 'title')
         .sort({ date: 1 });
+
     res.json(events);
 });
 
@@ -91,13 +161,23 @@ const getEvents = asyncHandler(async (req, res) => {
 // @route   GET /api/events/my-events
 // @access  Private
 const getMyEvents = asyncHandler(async (req, res) => {
-    const events = await Event.find({
+    // Instructors/students should not get events soft-deleted by instructors
+    const baseFilter = {
         $or: [
             { instructor: req.user._id },
             { enrolledStudents: req.user._id }
         ]
-    })
-    .populate('instructor', 'name email')
+    };
+    if (req.user.role === 'admin' || req.user.role === 'sub-admin') {
+        // Admin sees all matching events
+        // allow deletedByRole values
+    } else {
+        baseFilter.deletedByRole = { $ne: 'instructor' };
+    }
+
+    const events = await Event.find(baseFilter)
+    .populate('instructor', 'fullName email')
+    .populate('createdByUserId', 'fullName email')
     .populate('course', 'title')
     .sort({ date: 1 });
     
@@ -108,11 +188,14 @@ const getMyEvents = asyncHandler(async (req, res) => {
 // @route   GET /api/events/upcoming
 // @access  Private
 const getUpcomingEvents = asyncHandler(async (req, res) => {
+    // Exclude events soft-deleted by instructors from general upcoming list
     const events = await Event.find({
         date: { $gte: new Date() },
-        status: 'Scheduled'
+        status: 'Scheduled',
+        deletedByRole: { $ne: 'instructor' }
     })
-    .populate('instructor', 'name email')
+    .populate('instructor', 'fullName email')
+    .populate('createdByUserId', 'fullName email')
     .populate('course', 'title')
     .sort({ date: 1 })
     .limit(5);
@@ -131,7 +214,8 @@ const getEventsByCourse = asyncHandler(async (req, res) => {
         date: { $gte: new Date() },
         status: 'Scheduled'
     })
-    .populate('instructor', 'name email')
+    .populate('instructor', 'fullName email')
+    .populate('createdByUserId', 'fullName email')
     .populate('course', 'title')
     .sort({ date: 1 });
 
@@ -178,19 +262,65 @@ const updateEvent = asyncHandler(async (req, res) => {
         throw new Error('Event not found');
     }
 
-    // Check if user is instructor of the event or admin
-    if (event.instructor.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-        res.status(403);
-        throw new Error('Not authorized to update this event');
+    // Resolve instructor id whether populated or raw
+    let ownerId = null;
+    if (event.instructor) {
+        if (typeof event.instructor === 'string') ownerId = event.instructor;
+        else if (event.instructor._id) ownerId = event.instructor._id.toString();
+        else if (event.instructor.toString) ownerId = event.instructor.toString();
     }
 
-    const updatedEvent = await Event.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-    );
+    // Only allow instructors who own the event or admins to update
+    if (req.user.role !== 'admin') {
+        if (!ownerId || ownerId !== req.user._id.toString()) {
+            res.status(403);
+            throw new Error('Not authorized to update this event');
+        }
+    }
 
-    res.json(updatedEvent);
+    // Sanitize incoming update payload: only admin can set free-text instructorName
+    const updatePayload = { ...req.body };
+    const isObjectIdLike = (val) => typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val);
+    if (req.user.role !== 'admin') {
+        // prevent non-admins from setting instructorName
+        delete updatePayload.instructorName;
+    } else {
+        // admin submitted instructor: ensure it's either an ObjectId or else ignore (they may use instructorName)
+        if (updatePayload.instructor && !isObjectIdLike(updatePayload.instructor)) {
+            delete updatePayload.instructor;
+        }
+    }
+
+        // If admin updated the `course` and didn't set instructor/instructorName,
+        // assign the course's instructor so that instructor will see the event.
+        if (req.user.role === 'admin' && updatePayload.course && !updatePayload.instructor && !updatePayload.instructorName) {
+            try {
+                const courseObj = await Course.findById(updatePayload.course).select('instructor');
+                if (courseObj && courseObj.instructor) {
+                    updatePayload.instructor = courseObj.instructor._id ? courseObj.instructor._id : courseObj.instructor;
+                }
+            } catch (err) {
+                // ignore lookup failure
+            }
+        }
+
+        const updatedRaw = await Event.findByIdAndUpdate(
+                    req.params.id,
+                    updatePayload,
+                    { new: true }
+            );
+        const updatedEvent = await Event.findById(updatedRaw._id)
+            .populate('instructor', 'fullName email')
+            .populate('createdByUserId', 'fullName email')
+            .populate('course', 'title');
+
+        // Emit change so clients can refresh
+        try {
+            const io = getIo();
+            if (io) io.emit('events:changed', { action: 'updated', _id: updatedEvent._id.toString() });
+        } catch (err) { console.warn('Failed to emit events:changed for update', err); }
+
+        res.json(updatedEvent);
 });
 
 // @desc    Delete event
@@ -208,19 +338,58 @@ const deleteEvent = asyncHandler(async (req, res) => {
     if (req.user.role === 'admin' || req.user.role === 'sub-admin') {
         // Admin permanently deletes the event from database
         await Event.findByIdAndDelete(req.params.id);
+
+        // Notify affected users via sockets so their UIs can remove the event
+        try {
+            const io = getIo();
+            if (io) {
+                const instrId = event.instructor && (event.instructor._id || event.instructor) ? (event.instructor._id || event.instructor).toString() : null;
+                if (instrId) io.to(`user:${instrId}`).emit('event:deleted', { _id: event._id.toString(), deletedByRole: 'admin' });
+
+                // Notify enrolled students
+                if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+                    event.enrolledStudents.forEach(sid => {
+                        try { const id = sid && (sid._id || sid).toString ? (sid._id || sid).toString() : sid; if (id) io.to(`user:${id}`).emit('event:deleted', { _id: event._id.toString(), deletedByRole: 'admin' }); } catch (e) {}
+                    });
+                }
+
+                // Broadcast to a general events channel so any subscribed admin panels update
+                io.emit('events:changed', { action: 'deleted', _id: event._id.toString() });
+            }
+        } catch (err) {
+            console.warn('Failed to emit socket event for delete:', err);
+        }
+
         res.json({ message: 'Event permanently deleted from all panels' });
     } 
     // Instructor can only soft-delete (mark as deletedByRole: 'instructor')
     else if (req.user.role === 'instructor') {
         // Instructor may only delete events they created (instructor field)
-        const ownerId = event.instructor && event.instructor.toString ? event.instructor.toString() : (event.instructor || '').toString();
-        if (ownerId !== req.user._id.toString()) {
+        let ownerId = null;
+        if (event.instructor) {
+            if (typeof event.instructor === 'string') ownerId = event.instructor;
+            else if (event.instructor._id) ownerId = event.instructor._id.toString();
+            else if (event.instructor.toString) ownerId = event.instructor.toString();
+        }
+        if (!ownerId || ownerId !== req.user._id.toString()) {
             res.status(403);
             throw new Error('Forbidden: instructors can only delete their own events');
         }
         // Instructor soft-deletes - event is hidden from instructor and student panels but visible to admin
         event.deletedByRole = 'instructor';
         await event.save();
+        // Emit sockets so other clients (including admin) know about the deletion
+        try {
+            const io = getIo();
+            if (io) {
+                const instrId = event.instructor && (event.instructor._id || event.instructor) ? (event.instructor._id || event.instructor).toString() : null;
+                if (instrId) io.to(`user:${instrId}`).emit('event:deleted', { _id: event._id.toString(), deletedByRole: 'instructor' });
+                io.emit('events:changed', { action: 'deleted', _id: event._id.toString() });
+            }
+        } catch (err) {
+            console.warn('Failed to emit socket event for instructor delete:', err);
+        }
+
         res.json({ message: 'Event deleted from instructor and student views' });
     } 
     else {

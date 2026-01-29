@@ -268,7 +268,7 @@ function Registration() {
             >
               <option value="student">Student</option>
               <option value="instructor">Instructor</option>
-              <option value="parent">Parent</option>
+              {/* <option value="parent">Parent</option> */}
             </select>
 
             {/* Age - Only visible for students */}

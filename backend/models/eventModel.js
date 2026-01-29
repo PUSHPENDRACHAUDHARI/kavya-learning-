@@ -5,10 +5,20 @@ const eventSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Event title is required']
     },
+    description: {
+        type: String,
+        required: false,
+        default: ''
+    },
     instructor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: false
+    },
+    instructorName: {
+        type: String,
+        required: false,
+        default: null
     },
     type: {
         type: String,
