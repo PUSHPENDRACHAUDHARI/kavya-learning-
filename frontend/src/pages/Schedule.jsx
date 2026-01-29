@@ -215,6 +215,33 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         
         // Success when server returns created event with _id
         if (res && res._id) {
+          // If the creator is an instructor or admin, also create a shared event
+          (async () => {
+            try {
+              const role = userRole;
+              if (role !== 'student' && role !== 'parent') {
+                try {
+                  await axiosClient.post('/api/shared-events', {
+                    title: res.title,
+                    instructor: (res.instructor && (res.instructor._id || res.instructor)) || form.instructor || null,
+                    course: res.course || form.course || null,
+                    date: res.date || form.date,
+                    startTime: res.startTime || `${form.startTime} ${form.startPeriod}`,
+                    endTime: res.endTime || `${form.endTime} ${form.endPeriod}`,
+                    location: res.location || form.location || 'Online',
+                    maxStudents: res.maxStudents || form.maxStudents || 0,
+                    meetLink: res.meetLink || form.meetLink || null,
+                  });
+                } catch (e) {
+                  // ignore shared event creation failures
+                  console.warn('Failed to create shared event', e && e.message ? e.message : e);
+                }
+              }
+            } catch (err) {
+              // no-op
+            }
+          })();
+
           onAdd({
             title: res.title,
             instructor: res.instructor && (res.instructor.fullName || res.instructor.email) || form.instructor,
@@ -234,7 +261,45 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
           setFormError(res.message || res.error || (eventToEdit ? 'Failed to update event' : 'Failed to create event'));
           return;
         } else {
-          // Unknown server response - treat as network fallback and save locally
+          // Unknown server response - for instructors/admins try saving to backend SharedEvent
+          if (userRole !== 'student' && userRole !== 'parent') {
+            try {
+              const rShared = await axiosClient.post('/api/shared-events', {
+                title: newEvent.title,
+                instructor: newEvent.instructor || form.instructor || null,
+                course: newEvent.course || form.course || null,
+                date: newEvent.date || form.date,
+                startTime: newEvent.startTime || `${form.startTime} ${form.startPeriod}`,
+                endTime: newEvent.endTime || `${form.endTime} ${form.endPeriod}`,
+                location: newEvent.location || form.location || 'Online',
+                maxStudents: newEvent.maxStudents || form.maxStudents || 0,
+                meetLink: newEvent.meetLink || form.meetLink || null,
+              });
+              const shared = rShared && (rShared.data && (rShared.data.data || rShared.data)) ? (rShared.data.data || rShared.data) : (rShared.data || rShared);
+              if (shared) {
+                onAdd({
+                  title: shared.title || newEvent.title,
+                  instructor: shared.instructor || form.instructor,
+                  createdByUserId: shared.createdByUserId && (shared.createdByUserId._id || shared.createdByUserId) ? (shared.createdByUserId._id || shared.createdByUserId).toString() : null,
+                  createdByRole: shared.createdByRole || null,
+                  date: shared.date ? new Date(shared.date).toLocaleDateString() : (newEvent.date || form.date),
+                  time: `${shared.startTime || newEvent.startTime || form.startTime} - ${shared.endTime || newEvent.endTime || form.endTime}`,
+                  location: shared.location || newEvent.location || form.location || 'Online',
+                  students: getStudentsText(shared),
+                  type: shared.type || newEvent.type || form.type,
+                  status: shared.status || 'Scheduled',
+                  meetLink: shared.meetLink || newEvent.meetLink || form.meetLink || null,
+                  _id: shared._id || shared._id
+                });
+                onClose();
+                return;
+              }
+            } catch (e) {
+              setFormError('Failed to persist event to server. Please try again.');
+              return;
+            }
+          }
+          // Fallback for students/parents or if shared-event creation not attempted: save locally
           const computeLocalExpiry = (dateStr, timeStr) => {
             try {
               if (!dateStr) return null;
@@ -272,8 +337,46 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
           });
         }
       } catch (err) {
-        console.warn('API create event failed, falling back to local state', err.message || err);
-        // On network error, also persist as local event with expiry
+          console.warn('API create event failed, falling back to local state', err.message || err);
+          // On network error, for instructors/admins attempt to save as SharedEvent instead of local
+          if (userRole !== 'student' && userRole !== 'parent') {
+            try {
+              const rShared = await axiosClient.post('/api/shared-events', {
+                title: newEvent.title,
+                instructor: newEvent.instructor || form.instructor || null,
+                course: newEvent.course || form.course || null,
+                date: newEvent.date || form.date,
+                startTime: newEvent.startTime || `${form.startTime} ${form.startPeriod}`,
+                endTime: newEvent.endTime || `${form.endTime} ${form.endPeriod}`,
+                location: newEvent.location || form.location || 'Online',
+                maxStudents: newEvent.maxStudents || form.maxStudents || 0,
+                meetLink: newEvent.meetLink || form.meetLink || null,
+              });
+              const shared = rShared && (rShared.data && (rShared.data.data || rShared.data)) ? (rShared.data.data || rShared.data) : (rShared.data || rShared);
+              if (shared) {
+                onAdd({
+                  title: shared.title || newEvent.title,
+                  instructor: shared.instructor || form.instructor,
+                  createdByUserId: shared.createdByUserId && (shared.createdByUserId._id || shared.createdByUserId) ? (shared.createdByUserId._id || shared.createdByUserId).toString() : null,
+                  createdByRole: shared.createdByRole || null,
+                  date: shared.date ? new Date(shared.date).toLocaleDateString() : (newEvent.date || form.date),
+                  time: `${shared.startTime || newEvent.startTime || form.startTime} - ${shared.endTime || newEvent.endTime || form.endTime}`,
+                  location: shared.location || newEvent.location || form.location || 'Online',
+                  students: getStudentsText(shared),
+                  type: shared.type || newEvent.type || form.type,
+                  status: shared.status || 'Scheduled',
+                  meetLink: shared.meetLink || newEvent.meetLink || form.meetLink || null,
+                  _id: shared._id || shared._id
+                });
+                onClose();
+                return;
+              }
+            } catch (e) {
+              setFormError('Failed to persist event to server. Please try again.');
+              return;
+            }
+          }
+          // On network error, also persist as local event with expiry (students/parents)
         const computeLocalExpiry = (dateStr, timeStr) => {
           try {
             if (!dateStr) return null;
@@ -628,6 +731,15 @@ function Schedule() {
       try {
         const api = await import("../api");
         const events = await api.getEventsByDate(dateStr);
+        // Fetch shared events for the same date and merge them so events created by instructors/admins
+        // are visible across browsers
+        let shared = [];
+        try {
+          const s = await api.getSharedEvents(dateStr);
+          if (Array.isArray(s)) shared = s;
+        } catch (e) {
+          console.warn('Failed to load shared events', e && e.message ? e.message : e);
+        }
         if (Array.isArray(events) && userProfile && userProfile._id) {
           // Filter events to those where the user is the instructor or is enrolled
           const uid = userProfile._id;
@@ -637,7 +749,8 @@ function Schedule() {
             return (instr && instr.toString() === uid.toString()) || enrolled.includes(uid.toString());
           });
 
-          const transformed = filtered.map((e) => ({
+          // Merge backend events + shared events, de-duping by _id when available
+          const backendTransformed = filtered.map((e) => ({
             time: e.startTime || 'TBD',
             title: e.title,
             instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
@@ -650,6 +763,27 @@ function Schedule() {
             status: e.status || 'Scheduled',
             _id: e._id
           }));
+
+          const sharedTransformed = (shared || []).map(se => ({
+            time: se.startTime || 'TBD',
+            title: se.title,
+            instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || form.instructor || 'TBD',
+            createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
+            createdByRole: se.createdByRole || null,
+            date: se.date ? new Date(se.date).toLocaleDateString() : 'TBD',
+            location: se.location || 'Online',
+            students: getStudentsText(se),
+            type: se.type || 'Live Class',
+            status: se.status || 'Scheduled',
+            _id: se._id
+          }));
+
+          // Combine and dedupe by _id
+          const map = new Map();
+          backendTransformed.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(JSON.stringify([it.title, it.date, it.time]), it); });
+          sharedTransformed.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(JSON.stringify([it.title, it.date, it.time]), it); });
+
+          const transformed = Array.from(map.values());
           setSelectedDateEvents(transformed);
         } else {
           // No user or no related events => empty
@@ -917,12 +1051,20 @@ function Schedule() {
     // Format date as YYYY-MM-DD for API
     const dateStr = day.toISOString().split('T')[0];
    
-    try {
+      try {
       const api = await import("../api");
       const events = await api.getEventsByDate(dateStr);
-      if (Array.isArray(events)) {
+      // also fetch shared events for this date
+      let shared = [];
+      try {
+        const s = await api.getSharedEvents(dateStr);
+        if (Array.isArray(s)) shared = s;
+      } catch (e) {
+        console.warn('Failed to load shared events', e && e.message ? e.message : e);
+      }
+      if (Array.isArray(events) || Array.isArray(shared)) {
         // Transform backend events to match the display format
-        const transformed = events.map((e) => ({
+        const backend = Array.isArray(events) ? events.map((e) => ({
           time: e.startTime || 'TBD',
           title: e.title,
           instructor: e.instructor && (e.instructor.fullName || e.instructor.name || e.instructor.email) || "TBD",
@@ -935,7 +1077,28 @@ function Schedule() {
           type: e.type || 'Live Class',
           status: e.status || 'Scheduled',
           _id: e._id
-        }));
+        })) : [];
+
+        const sharedTransformed = Array.isArray(shared) ? shared.map(se => ({
+          time: se.startTime || 'TBD',
+          title: se.title,
+          instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || 'TBD',
+          instructorId: se.instructor && (se.instructor._id || se.instructor) ? (se.instructor._id || se.instructor).toString() : null,
+          createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
+          createdByRole: se.createdByRole || null,
+          date: se.date ? new Date(se.date).toLocaleDateString() : 'TBD',
+          location: se.location || 'Online',
+          students: getStudentsText(se),
+          type: se.type || 'Live Class',
+          status: se.status || 'Scheduled',
+          _id: se._id
+        })) : [];
+
+        const map = new Map();
+        backend.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(JSON.stringify([it.title, it.date, it.time]), it); });
+        sharedTransformed.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(JSON.stringify([it.title, it.date, it.time]), it); });
+
+        const transformed = Array.from(map.values());
         setSelectedDateEvents(transformed);
       }
     } catch (err) {
@@ -1011,6 +1174,48 @@ function Schedule() {
         // Fetch reminders from backend notifications
         await fetchRemindersFromBackend();
         return;
+      }
+
+      // If server didn't return structured upcoming response, still try to include shared events
+      // Fetch shared events and merge them into the list so instructor-created events appear across browsers
+      try {
+        const sharedAll = await api.getSharedEvents();
+        if (Array.isArray(sharedAll) && sharedAll.length) {
+          // Keep only upcoming (today or later)
+          const now = new Date();
+          const upcomingShared = sharedAll.filter(se => {
+            try {
+              const d = new Date(se.date);
+              return !isNaN(d) && d >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            } catch (e) { return true; }
+          }).map(se => ({
+            title: se.title,
+            instructor: se.instructor && (se.instructor.fullName || se.instructor.email) || 'TBD',
+            instructorId: se.instructor && (se.instructor._id || se.instructor) ? (se.instructor._id || se.instructor).toString() : null,
+            createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
+            createdByRole: se.createdByRole || null,
+            date: se.date ? new Date(se.date).toLocaleDateString() : 'TBD',
+            time: `${se.startTime || 'TBD'} - ${se.endTime || 'TBD'}`,
+            location: se.location || 'Online',
+            students: getStudentsText(se),
+            type: se.type || 'Live Class',
+            status: se.status || 'Scheduled',
+            _id: se._id
+          }));
+
+          // Merge with existing upcomingClasses, dedupe by eventKey/_id
+          setUpcomingClasses(prev => {
+            const existing = Array.isArray(prev) ? prev : [];
+            const map = new Map();
+            existing.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(eventKey(it), it); });
+            upcomingShared.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(eventKey(it), it); });
+            const mergedList = Array.from(map.values());
+            setUpcomingCount(mergedList.length || 0);
+            return mergedList;
+          });
+        }
+      } catch (e) {
+        // ignore shared fetch errors
       }
 
       if (Array.isArray(res)) {

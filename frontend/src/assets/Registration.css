@@ -149,6 +149,46 @@ textarea.input-field {
     transform: translateY(-1px);
 }
 
+/* OTP UI actions (verify + resend) */
+.otp-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 12px;
+}
+
+.otp-input-field {
+    width: 220px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-size: 1rem;
+}
+
+.verify-btn {
+    background-color: #5c2d91;
+    color: #fff;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.verify-btn:hover { background-color: #47235f }
+
+.resend-btn {
+    background: transparent;
+    border: none;
+    color: #5c2d91;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.resend-btn:hover { background: #f0eef8 }
+
 /* LOGIN TEXT */
 .login-text {
     margin-top: 25px;

@@ -48,6 +48,13 @@ export async function getEvents() {
   return res.json();
 }
 
+// Get shared events created by instructors/admins; optional dateStr (YYYY-MM-DD)
+export async function getSharedEvents(dateStr) {
+  const url = dateStr ? `${BASE}/shared-events?date=${encodeURIComponent(dateStr)}` : `${BASE}/shared-events`;
+  const res = await fetch(`${BASE}/shared-events${dateStr ? `?date=${encodeURIComponent(dateStr)}` : ''}`, { headers: authHeaders() });
+  return res.json();
+}
+
 // Convenience: get events for a specific date (client-side filter)
 export async function getEventsByDate(dateStr) {
   try {
