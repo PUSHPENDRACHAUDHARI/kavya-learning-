@@ -27,8 +27,17 @@ const LiveSessionManager = ({ courseId, userRole }) => {
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+    console.log('LiveSessionManager mounted with courseId:', courseId);
+    console.log('LiveSessionManager mounted with userRole:', userRole);
+
     useEffect(() => {
-        fetchSessions();
+        if (courseId) {
+            fetchSessions();
+        } else {
+            console.error('No courseId provided to LiveSessionManager');
+            setError('No course ID provided');
+            setLoading(false);
+        }
     }, [courseId]);
 
     const fetchSessions = async () => {
@@ -414,54 +423,168 @@ const LiveSessionManager = ({ courseId, userRole }) => {
 
             {/* Create/Edit Session Modal */}
             {showCreateForm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <h3 className="text-xl font-semibold mb-4">
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        padding: '24px',
+                        width: '100%',
+                        maxWidth: '600px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        position: 'relative'
+                    }}>
+                        {/* Error and Success Messages inside modal */}
+                        {error && (
+                            <div style={{
+                                marginBottom: '16px',
+                                backgroundColor: '#fef2f2',
+                                border: '1px solid #f87171',
+                                color: '#dc2626',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                wordBreak: 'break-word'
+                            }}>
+                                {error}
+                            </div>
+                        )}
+                        {success && (
+                            <div style={{
+                                marginBottom: '16px',
+                                backgroundColor: '#f0fdf4',
+                                border: '1px solid #4ade80',
+                                color: '#16a34a',
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                fontSize: '14px'
+                            }}>
+                                {success}
+                            </div>
+                        )}
+                        
+                        <h3 style={{
+                            fontSize: '20px',
+                            fontWeight: '600',
+                            marginBottom: '20px',
+                            color: '#1f2937'
+                        }}>
                             {editingSession ? 'Edit Session' : 'Create New Session'}
                         </h3>
                         
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Session Title
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    color: '#374151',
+                                    marginBottom: '6px'
+                                }}>
+                                    Session Title *
                                 </label>
                                 <input
                                     type="text"
                                     required
                                     value={formData.title}
                                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        boxSizing: 'border-box',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                                    placeholder="Enter session title"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Description
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    color: '#374151',
+                                    marginBottom: '6px'
+                                }}>
+                                    Description *
                                 </label>
                                 <textarea
                                     required
                                     value={formData.description}
                                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                                     rows={3}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        boxSizing: 'border-box',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s',
+                                        resize: 'vertical'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                                    placeholder="Enter session description"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Scheduled Start Time
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    color: '#374151',
+                                    marginBottom: '6px'
+                                }}>
+                                    Scheduled Start Time *
                                 </label>
                                 <input
                                     type="datetime-local"
                                     required
                                     value={formData.scheduledStartTime}
                                     onChange={(e) => setFormData({...formData, scheduledStartTime: e.target.value})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        boxSizing: 'border-box',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    color: '#374151',
+                                    marginBottom: '6px'
+                                }}>
                                     Maximum Participants
                                 </label>
                                 <input
@@ -470,15 +593,30 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                     max="200"
                                     value={formData.maxParticipants}
                                     onChange={(e) => setFormData({...formData, maxParticipants: parseInt(e.target.value)})}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 12px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '6px',
+                                        fontSize: '14px',
+                                        boxSizing: 'border-box',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-700">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <label style={{
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    color: '#374151'
+                                }}>
                                     Session Settings
                                 </label>
-                                <label className="flex items-center">
+                                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
                                         checked={formData.settings.allowChat}
@@ -486,11 +624,11 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                             ...formData, 
                                             settings: {...formData.settings, allowChat: e.target.checked}
                                         })}
-                                        className="mr-2"
+                                        style={{ marginRight: '8px' }}
                                     />
-                                    Allow Chat
+                                    <span style={{ fontSize: '14px', color: '#4b5563' }}>Allow Chat</span>
                                 </label>
-                                <label className="flex items-center">
+                                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
                                         checked={formData.settings.allowScreenShare}
@@ -498,11 +636,11 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                             ...formData, 
                                             settings: {...formData.settings, allowScreenShare: e.target.checked}
                                         })}
-                                        className="mr-2"
+                                        style={{ marginRight: '8px' }}
                                     />
-                                    Allow Screen Sharing
+                                    <span style={{ fontSize: '14px', color: '#4b5563' }}>Allow Screen Sharing</span>
                                 </label>
-                                <label className="flex items-center">
+                                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
                                         checked={formData.settings.muteParticipantsOnJoin}
@@ -510,11 +648,11 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                             ...formData, 
                                             settings: {...formData.settings, muteParticipantsOnJoin: e.target.checked}
                                         })}
-                                        className="mr-2"
+                                        style={{ marginRight: '8px' }}
                                     />
-                                    Mute Participants on Join
+                                    <span style={{ fontSize: '14px', color: '#4b5563' }}>Mute Participants on Join</span>
                                 </label>
-                                <label className="flex items-center">
+                                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
                                     <input
                                         type="checkbox"
                                         checked={formData.settings.waitingRoom}
@@ -522,13 +660,20 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                             ...formData, 
                                             settings: {...formData.settings, waitingRoom: e.target.checked}
                                         })}
-                                        className="mr-2"
+                                        style={{ marginRight: '8px' }}
                                     />
-                                    Enable Waiting Room
+                                    <span style={{ fontSize: '14px', color: '#4b5563' }}>Enable Waiting Room</span>
                                 </label>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-4">
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'flex-end', 
+                                gap: '12px', 
+                                paddingTop: '20px',
+                                marginTop: '20px',
+                                borderTop: '1px solid #e5e7eb'
+                            }}>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -537,7 +682,24 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                         setError('');
                                         setSuccess('');
                                     }}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                    style={{
+                                        padding: '8px 16px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '6px',
+                                        backgroundColor: 'white',
+                                        color: '#6b7280',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.backgroundColor = '#f9fafb';
+                                        e.target.style.borderColor = '#9ca3af';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.backgroundColor = 'white';
+                                        e.target.style.borderColor = '#d1d5db';
+                                    }}
                                 >
                                     Cancel
                                 </button>
@@ -550,9 +712,11 @@ const LiveSessionManager = ({ courseId, userRole }) => {
                                             : 'linear-gradient(to right, #2563eb, #1d4ed8)',
                                         color: 'white',
                                         padding: '8px 24px',
-                                        borderRadius: '8px',
+                                        borderRadius: '6px',
                                         border: 'none',
                                         cursor: submitting ? 'not-allowed' : 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
                                         transition: 'all 0.2s',
                                         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
                                         opacity: submitting ? 0.5 : 1
