@@ -1,61 +1,49 @@
-// Email sender using Nodemailer. Falls back to console log when not configured.
-const nodemailer = require('nodemailer');
+// SendGrid-based email sender. Replaces Nodemailer to avoid SMTP in production.
+const sgMail = require('@sendgrid/mail');
 
-// Create transporter from env vars; if missing, transporter will be null
-function createTransporter() {
-    const host = process.env.EMAIL_HOST;
-    const port = process.env.EMAIL_PORT;
-    const user = process.env.EMAIL_USER;
-    const pass = process.env.EMAIL_PASS;
-    const allowSelfSigned = String(process.env.EMAIL_ALLOW_SELF_SIGNED || '').toLowerCase() === 'true';
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const SENDGRID_FROM = process.env.SENDGRID_FROM_EMAIL;
+const SENDGRID_OTP_TEMPLATE = process.env.SENDGRID_OTP_TEMPLATE_ID; // optional
 
-    if (!host || !port || !user || !pass) {
-        return null;
-    }
-
-    const transportOptions = {
-        host,
-        port: Number(port),
-        secure: Number(port) === 465, // true for 465, false for other ports
-        auth: {
-            user,
-            pass,
-        },
-    };
-
-    // Optionally allow self-signed certificates (useful for dev or internal SMTP with self-signed certs)
-    if (allowSelfSigned) {
-        transportOptions.tls = { rejectUnauthorized: false };
-    }
-
-    return nodemailer.createTransport(transportOptions);
+if (!SENDGRID_API_KEY) {
+    console.warn('SENDGRID_API_KEY not set. Emails will be logged to console.');
+} else {
+    sgMail.setApiKey(SENDGRID_API_KEY);
 }
 
 async function sendOtpEmail(to, otp) {
-    const transporter = createTransporter();
-    const from = process.env.FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@example.com';
-    const subject = 'Your verification code';
-    const text = `Your verification code is ${otp}. It is valid for 5 minutes.`;
-    const html = `<p>Your verification code is <strong>${otp}</strong>. It is valid for 5 minutes.</p>`;
+    const from = SENDGRID_FROM || 'no-reply@example.com';
 
-    if (!transporter) {
-        // In development, print to console so it's easy to copy
-        console.warn('Email transporter not configured. OTP:', otp);
-        return Promise.resolve();
+    const msg = {
+        to,
+        from,
+        subject: 'Your verification code',
+        text: `Your verification code is ${otp}. It is valid for 5 minutes.`,
+        html: `<p>Your verification code is <strong>${otp}</strong>. It is valid for 5 minutes.</p>`,
+    };
+
+    // If template is configured, prefer dynamic template with otp as dynamic data
+    if (SENDGRID_OTP_TEMPLATE) {
+        msg.templateId = SENDGRID_OTP_TEMPLATE;
+        msg.dynamic_template_data = { otp };
+        // remove plain text/html when using template
+        delete msg.text;
+        delete msg.html;
+    }
+
+    if (!SENDGRID_API_KEY) {
+        // Dev fallback: log OTP so developer can use it
+        console.warn('[SendGrid] API key missing. OTP for', to, ':', otp);
+        return Promise.resolve({ logged: true });
     }
 
     try {
-        const info = await transporter.sendMail({
-            from,
-            to,
-            subject,
-            text,
-            html,
-        });
-        return info;
+        const res = await sgMail.send(msg);
+        return res;
     } catch (err) {
-        // Surface the error so caller can log; do not swallow
-        throw err;
+        // Provide useful logging while not leaking internals to callers
+        console.error('[SendGrid] Failed to send email:', (err && err.response && err.response.body) || err.message || err);
+        throw new Error('Failed to send OTP email');
     }
 }
 
