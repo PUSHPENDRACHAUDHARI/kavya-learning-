@@ -62,6 +62,19 @@ const corsOptions = {
     // Accept exact matches from allowedOrigins
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
+    // Accept Railway-hosted frontends (e.g. https://<app>.up.railway.app)
+    // This allows deployment-hosted frontends on Railway to access the API
+    // without needing to add each generated hostname to FRONTEND_URLS.
+    try {
+      const lc = origin.toLowerCase();
+      if (lc.endsWith('.up.railway.app')) {
+        console.log('➡️  Allowing Railway origin via suffix match:', origin);
+        return callback(null, true);
+      }
+    } catch (e) {
+      // ignore malformed origin values and fall through to block
+    }
+
     // Not allowed — include the origin in the error message for diagnostics
     const err = new Error(`Not allowed by CORS — origin: ${origin}`);
     console.warn('⛔ CORS blocked request from origin:', origin);
