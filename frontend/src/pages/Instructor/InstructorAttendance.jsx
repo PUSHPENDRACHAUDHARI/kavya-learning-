@@ -4,28 +4,73 @@ import { Eye, Download, Loader } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import './InstructorAttendance.css';
 
-const InstructorAttendance = () => {
-  const navigate = useNavigate();
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [attendanceDetails, setAttendanceDetails] = useState([]);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+function InstructorAttendance() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceList, setAttendanceList] = useState([]);
+  const [attendanceEvent, setAttendanceEvent] = useState(null);
 
-  // Fetch attendance records on mount
+  // Fetch all events on mount
   useEffect(() => {
-    fetchAttendanceRecords();
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await axiosClient.get('/api/events');
+        setEvents(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      } catch (err) {
+        console.error('Failed to load events', err);
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
-  const fetchAttendanceRecords = async () => {
+  // Handle View Attendance button click
+  const handleViewAttendance = async (event) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
+      setAttendanceLoading(true);
+      setAttendanceModalOpen(true);
+      setAttendanceEvent(event);
+      const api = await import('../../api');
+      const res = await api.getAttendanceForEvent(event._id);
+      if (res && Array.isArray(res.students)) setAttendanceList(res.students);
+      else setAttendanceList([]);
+    } catch (err) {
+      console.warn('Failed to load attendance', err);
+      setAttendanceList([]);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  // Format event time
+  const formatTime = (event) => {
+    const start = event.startTime || 'TBD';
+    const end = event.endTime || 'TBD';
+    return `${start} - ${end}`;
+  };
+
+  // Get event creator name
+  const getCreatorName = (event) => {
+    if (event.instructor) {
+      if (typeof event.instructor === 'string') return event.instructor;
+      return event.instructor.fullName || event.instructor.name || event.instructor.email || 'Unknown';
+    }
+    return 'Unknown';
+  };
+
+  // Format event date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch (e) {
+      return 'TBD';
+    }
+  };
 
       const response = await fetch('/api/attendance/instructor/records', {
         headers: {
@@ -96,174 +141,92 @@ const InstructorAttendance = () => {
   const handleDownloadCSV = () => {
     if (!attendanceDetails.length) return;
 
-    let csv = 'Student Name,Email,Status,Marked At\n';
-    attendanceDetails.forEach(record => {
-      const markedAt = record.createdAt 
-        ? new Date(record.createdAt).toLocaleString()
-        : 'N/A';
-      csv += `"${record.studentName}","${record.studentEmail}","${record.status}","${markedAt}"\n`;
-    });
+        {loading && <div style={{ marginTop: 18 }}>Loading events...</div>}
 
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance-${selectedEvent.eventId}-${Date.now()}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  return (
-    <AppLayout title="Instructor Attendance">
-      <div className="attendance-container">
-        <div className="attendance-header">
-          <h1>📋 Attendance Records</h1>
-          <button 
-            className="btn btn-primary"
-            onClick={fetchAttendanceRecords}
-            disabled={loading}
-          >
-            {loading ? '🔄 Refreshing...' : '🔄 Refresh'}
-          </button>
-        </div>
-
-        {error && (
-          <div className="alert alert-danger">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
-
-        {loading && attendanceRecords.length === 0 ? (
-          <div className="loading-spinner">
-            <Loader size={48} className="spinner" />
-            <p>Loading attendance records...</p>
-          </div>
-        ) : attendanceRecords.length === 0 ? (
-          <div className="empty-state">
-            <p>No attendance records found</p>
-            <small>Attendance will appear here once you mark students present/absent for completed classes</small>
-          </div>
-        ) : (
-          <div className="attendance-table-wrapper">
-            <table className="attendance-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Subject Name</th>
-                  <th>Total Students</th>
-                  <th>Present</th>
-                  <th>Absent</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendanceRecords.map((record, idx) => {
-                  const recordDate = new Date(record.date);
-                  const formattedDate = recordDate.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                  });
-
-                  return (
-                    <tr key={idx}>
-                      <td>{formattedDate}</td>
-                      <td><strong>{record.subjectName}</strong></td>
-                      <td>{record.totalStudents}</td>
-                      <td className="present-count">{record.presentCount}</td>
-                      <td className="absent-count">{record.absentCount}</td>
-                      <td>
+        {!loading && (
+          <div style={{ marginTop: 24 }}>
+            {events.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+                <thead>
+                  <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Name</th>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Time</th>
+                    <th style={{ padding: 12, textAlign: 'center', fontWeight: 600 }}>Attendance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map(event => (
+                    <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: 12 }}>{getCreatorName(event)}</td>
+                      <td style={{ padding: 12 }}>{formatDate(event.date)}</td>
+                      <td style={{ padding: 12 }}>{formatTime(event)}</td>
+                      <td style={{ padding: 12, textAlign: 'center' }}>
                         <button
-                          className="btn btn-sm btn-info"
-                          onClick={() => handleViewAttendance(
-                            record.eventId,
-                            record.subjectName,
-                            record.date
-                          )}
-                          disabled={loading}
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => handleViewAttendance(event)}
                         >
-                          <Eye size={16} />
-                          View Details
+                          View Attendance
                         </button>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ marginTop: 18, padding: 18, background: '#fff', borderRadius: 8 }}>
+                No events available
+              </div>
+            )}
           </div>
         )}
 
-        {/* Attendance Details Modal */}
-        {showDetailsModal && (
-          <div className="modal-backdrop" onClick={() => setShowDetailsModal(false)}>
-            <div className="modal-panel attendance-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>📝 Attendance Details</h3>
-                <button
-                  className="btn-close"
-                  onClick={() => setShowDetailsModal(false)}
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="modal-body">
-                <div className="event-info">
-                  <div className="info-row">
-                    <span className="label">Subject:</span>
-                    <span className="value">{selectedEvent?.title}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="label">Date:</span>
-                    <span className="value">{selectedEvent?.date}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="label">Total Students:</span>
-                    <span className="value">{attendanceDetails.length}</span>
-                  </div>
+        {/* Attendance Modal - Reused from Schedule */}
+        {attendanceModalOpen && (
+          <div className="attendance-modal-backdrop" style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100 }} onClick={() => setAttendanceModalOpen(false)}>
+            <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e) => e.stopPropagation()}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title : 'Attendance'}</h5>
+                <div>
+                  <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
                 </div>
-
-                <div className="attendance-list">
-                  {attendanceDetails.length === 0 ? (
-                    <p className="empty-message">No attendance records found</p>
-                  ) : (
-                    <div className="students-grid">
-                      {attendanceDetails.map((record, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`student-card ${record.status.toLowerCase()}`}
-                        >
-                          <div className="student-info">
-                            <h4>{record.studentName}</h4>
-                            <p>{record.studentEmail}</p>
-                          </div>
-                          <div className={`status-badge ${record.status.toLowerCase()}`}>
-                            {record.status}
-                          </div>
-                        </div>
+              </div>
+              {attendanceLoading ? (
+                <div>Loading attendance…</div>
+              ) : (
+                <div>
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Present:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length} &nbsp;
+                    <strong>Absent:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length}
+                    &nbsp; <small>({attendanceList.length} enrolled)</small>
+                  </div>
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>Status</th>
+                        <th>Joined At</th>
+                        <th>Left At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceList.map(a => (
+                        <tr key={a.studentId || a.email || Math.random()}>
+                          <td>{a.name || a.email || a.studentId}</td>
+                          <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
+                          <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
+                          <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
+                        </tr>
                       ))}
-                    </div>
-                  )}
+                      {attendanceList.length === 0 && (
+                        <tr>
+                          <td colSpan={4}>No attendance records yet</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-
-              <div className="modal-footer">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowDetailsModal(false)}
-                >
-                  Close
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleDownloadCSV}
-                  disabled={attendanceDetails.length === 0}
-                >
-                  <Download size={16} />
-                  Download CSV
-                </button>
-              </div>
+              )}
             </div>
           </div>
         )}
