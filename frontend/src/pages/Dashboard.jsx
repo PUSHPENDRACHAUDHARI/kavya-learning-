@@ -376,6 +376,8 @@ function Dashboard() {
         return;
       }
 
+      console.log('🔔 Dashboard: Setting reminder for:', { classTitle, classDate });
+
       // Send reminder to backend
       const reminderRes = await fetch('/api/events/reminder', {
         method: 'POST',
@@ -390,13 +392,18 @@ function Dashboard() {
         })
       });
 
+      console.log('Response status:', reminderRes.status);
+
+      const responseData = await reminderRes.json();
+      console.log('Response data:', responseData);
+
       if (reminderRes.ok) {
-        const data = await reminderRes.json();
         // Update local state to show reminder is set
         setReminders(prev => ({
           ...prev,
           [classTitle]: true
         }));
+        
         // Update dashboard feed to reflect reminded state and add a transient notification headline
         setDashboardFeed(prev => {
           const updated = prev.map(i => i.title === classTitle ? { ...i, reminded: true } : i);
@@ -412,17 +419,21 @@ function Dashboard() {
           };
           return [notice, ...updated];
         });
+        
         // Dispatch event so Schedule page refreshes reminders
         window.dispatchEvent(new Event('reminderSet'));
 
+        console.log('✅ Reminder set successfully');
+        
         // Show success message
         alert(`✅ Reminder set for ${classTitle} — You will be notified before the class.`);
       } else {
-        const errData = await reminderRes.json();
-        alert(errData.message || 'Failed to set reminder. Please try again.');
+        const errMessage = responseData.message || 'Failed to set reminder. Please try again.';
+        console.error('❌ Error response:', errMessage);
+        alert(errMessage);
       }
     } catch (err) {
-      console.warn('Error setting reminder:', err);
+      console.error('❌ Error setting reminder:', err);
       alert('Error setting reminder: ' + err.message);
     }
   };
@@ -508,11 +519,11 @@ function Dashboard() {
                 <button 
                   style={{ 
                     fontSize: "16px",
-                    fontWeight: "600",
+                    fontWeight: "700",
                     padding: "14px 28px",
                     borderRadius: "8px",
-                    border: "none",
-                    backgroundColor: reminders[u.title] ? "#4CAF50" : "#397ACF",
+                    border: "2px solid " + (reminders[u.title] ? "#059669" : "#397ACF"),
+                    backgroundColor: reminders[u.title] ? "#10b981" : "#397ACF",
                     color: "#ffffff",
                     display: "flex",
                     alignItems: "center",
@@ -520,25 +531,26 @@ function Dashboard() {
                     gap: "10px",
                     cursor: "pointer",
                     transition: "all 0.3s ease",
-                    boxShadow: "0 2px 8px rgba(57, 122, 207, 0.3)",
+                    boxShadow: reminders[u.title] ? "0 4px 14px rgba(16, 185, 129, 0.5)" : "0 2px 8px rgba(57, 122, 207, 0.3)",
                     minWidth: "140px",
                     whiteSpace: "nowrap",
-                    hover: {
-                      boxShadow: "0 4px 12px rgba(57, 122, 207, 0.4)"
-                    }
+                    textShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                    letterSpacing: "0.5px"
                   }}
                   onMouseEnter={(e) => {
-                    e.target.style.boxShadow = reminders[u.title] ? "0 4px 12px rgba(76, 175, 80, 0.4)" : "0 4px 12px rgba(57, 122, 207, 0.4)";
-                    e.target.style.transform = "translateY(-2px)";
+                    e.target.style.boxShadow = reminders[u.title] ? "0 6px 16px rgba(16, 185, 129, 0.6)" : "0 4px 12px rgba(57, 122, 207, 0.4)";
+                    e.target.style.transform = "translateY(-3px)";
+                    e.target.style.backgroundColor = reminders[u.title] ? "#059669" : "#2b6cb0";
                   }}
                   onMouseLeave={(e) => {
-                    e.target.style.boxShadow = reminders[u.title] ? "0 2px 8px rgba(76, 175, 80, 0.3)" : "0 2px 8px rgba(57, 122, 207, 0.3)";
+                    e.target.style.boxShadow = reminders[u.title] ? "0 4px 14px rgba(16, 185, 129, 0.5)" : "0 2px 8px rgba(57, 122, 207, 0.3)";
                     e.target.style.transform = "translateY(0)";
+                    e.target.style.backgroundColor = reminders[u.title] ? "#10b981" : "#397ACF";
                   }}
                   onClick={() => handleSetReminder(u.title, u.date)}
                 >
                   <FaBell size={16} />
-                  {reminders[u.title] ? 'Reminded' : 'Remind'}
+                  {reminders[u.title] ? 'Reminded ✓' : 'Remind'}
                 </button>
               </div>
             ))}

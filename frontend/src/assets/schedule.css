@@ -85,19 +85,19 @@ body {
   font-weight: 500;
 }
 
-/* Simple modal */
+/* Simple modal - full viewport overlay and centered panel */
 .modal-backdrop {
   position: fixed;
-  inset: 0;
+  inset: 0; /* cover entire viewport including behind the sidebar */
   background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1050;
+  z-index: 4000; /* must be above the sidebar (sidebar ~3000) */
 }
 
 .modal-panel {
-  width: 100%;
+  width: 90%;
   max-width: 680px;
   background: #ffffff;
   border-radius: 12px;
@@ -105,6 +105,110 @@ body {
   padding: 20px;
   overflow-y: auto;
   max-height: 90vh;
+  z-index: 4001; /* ensure panel sits above the backdrop and sidebar */
+  /* keep panel centered by the backdrop flexbox; no fixed left offset */
+}
+
+/* On desktop, shift the modal right so it's centered within the content area
+   (viewport minus the 260px sidebar). We use a fixed position so vertical
+   centering still works and the modal doesn't go underneath the sidebar. */
+@media (min-width: 1025px) {
+  .modal-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    /* shift right by half the sidebar width (260px / 2 = 130px) */
+    transform: translate(calc(-50% + 130px), -50%);
+    margin: 0; /* reset any auto margins */
+    max-height: 90vh;
+  }
+}
+
+/* Make modal content scrollable while keeping action buttons visible */
+.modal-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-panel > form {
+  /* allow form body to scroll if content exceeds max height */
+  overflow: auto;
+  flex: 1 1 auto;
+  margin: 0; /* ensure full use of panel */
+  padding-bottom: 0.5rem; /* breathing room for sticky footer */
+}
+
+/* Target the action row (Cancel / Add Event) and make it sticky at bottom of the form */
+.modal-panel > form .d-flex.justify-content-end {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.0), rgba(255,255,255,0.95));
+  padding-top: 10px;
+  padding-bottom: 6px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  z-index: 2;
+}
+
+/* Ensure sticky footer looks correct on dark theme */
+.dark .modal-panel > form .d-flex.justify-content-end {
+  background: linear-gradient(180deg, rgba(7,16,41,0.0), rgba(7,16,41,0.95));
+  border-top-color: rgba(255,255,255,0.06);
+}
+
+/* Range slider styling */
+.form-range {
+  appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-track {
+  width: 100%;
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  border: none;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2b6cb0, #37afac);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(43, 108, 176, 0.3);
+}
+
+.form-range::-moz-range-track {
+  background: #e9ecef;
+  border-radius: 3px;
+  border: none;
+  height: 6px;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2b6cb0, #37afac);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(43, 108, 176, 0.3);
+}
+
+.form-range:focus {
+  outline: none;
+}
+
+.form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0.25rem rgba(43, 108, 176, 0.25);
+}
+
+.form-range:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 0.25rem rgba(43, 108, 176, 0.25);
 }
 
 .btn-color {
@@ -123,7 +227,65 @@ body {
   color: #2f302f;
 }
 
-/* ✅ Responsive adjustments */
+/* Green button for reminder set */
+.btn-success {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.btn-success:hover {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+}
+
+.btn-success:disabled {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+}
+
+.btn-success:disabled:hover {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+}
+
+.btn-success:focus {
+  box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25) !important;
+}
+
+/* Additional styling to override Bootstrap defaults */
+.btn-success.btn-sm {
+  padding: 0.5rem 1rem !important;
+}
+
+/* Dark mode styling for green reminder button */
+.dark .btn-success {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+}
+
+.dark .btn-success:hover {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+}
+
+.dark .btn-success:disabled {
+  background-color: #10b981 !important;
+  border-color: #10b981 !important;
+  color: white !important;
+  opacity: 1 !important;
+}
+@media (max-width: 1024px) {
+  .modal-backdrop {
+    left: 0;
+  }
+}
+
 @media (max-width: 992px) {
   .schedule-card {
     padding: 16px !important;
@@ -317,5 +479,14 @@ body {
   color: #000 !important;
   background: #fff !important;
   border-color: #fff !important;
+}
+
+/* Dark mode range slider */
+.dark .form-range::-webkit-slider-track {
+  background: #1f2a37;
+}
+
+.dark .form-range::-moz-range-track {
+  background: #1f2a37;
 }
 

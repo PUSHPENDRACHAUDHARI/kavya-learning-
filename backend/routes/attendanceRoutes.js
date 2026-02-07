@@ -11,7 +11,10 @@ const {
   recordLiveSessionAttendance,
   updateLiveSessionAttendance,
   getLiveSessionAttendance,
-  getStudentLiveSessionAttendance
+  getStudentLiveSessionAttendance,
+  markAttendanceByInstructor,
+  getInstructorAttendanceRecords,
+  getAttendanceDetails
 } = require('../controllers/attendanceController');
 
 // debug controller (non-production)
@@ -56,5 +59,10 @@ router.post('/live-sessions/:sessionId/join', protect, recordLiveSessionAttendan
 router.post('/live-sessions/:sessionId/leave', protect, updateLiveSessionAttendance);
 router.get('/live-sessions/:sessionId', protect, getLiveSessionAttendance);
 router.get('/student/live-sessions', protect, getStudentLiveSessionAttendance);
+
+// Instructor attendance marking routes
+router.post('/mark-attendance', protect, authorize('instructor', 'admin', 'sub-admin'), markAttendanceByInstructor);
+router.get('/instructor/records', protect, authorize('instructor', 'admin', 'sub-admin'), getInstructorAttendanceRecords);
+router.get('/event/:eventId/details', protect, authorize('instructor', 'admin', 'sub-admin'), getAttendanceDetails);
 
 module.exports = router;

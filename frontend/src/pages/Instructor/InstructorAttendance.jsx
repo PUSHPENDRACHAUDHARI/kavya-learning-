@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Eye, Download, Loader } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
-import axiosClient from '../../api/axiosClient';
 import './InstructorAttendance.css';
 
 function InstructorAttendance() {
@@ -71,12 +72,74 @@ function InstructorAttendance() {
     }
   };
 
-  return (
-    <AppLayout showGreeting={false}>
-      <div style={{ padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2>Attendance</h2>
-        </div>
+      const response = await fetch('/api/attendance/instructor/records', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch attendance records');
+      }
+
+      const data = await response.json();
+      console.log('📋 Fetched attendance records:', data);
+
+      if (data.success && data.records) {
+        setAttendanceRecords(data.records.sort((a, b) => 
+          new Date(b.date) - new Date(a.date)
+        ));
+      }
+      setError(null);
+    } catch (err) {
+      console.error('❌ Error fetching attendance records:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewAttendance = async (eventId, subjectName, date) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`/api/attendance/event/${eventId}/details`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch attendance details');
+      }
+
+      const data = await response.json();
+      console.log('👥 Fetched attendance details:', data);
+
+      if (data.success) {
+        setSelectedEvent({
+          eventId,
+          title: subjectName,
+          date: new Date(date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        });
+        setAttendanceDetails(data.attendance || []);
+        setShowDetailsModal(true);
+      }
+    } catch (err) {
+      console.error('❌ Error fetching attendance details:', err);
+      alert('Failed to fetch attendance details: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadCSV = () => {
+    if (!attendanceDetails.length) return;
 
         {loading && <div style={{ marginTop: 18 }}>Loading events...</div>}
 
@@ -170,6 +233,6 @@ function InstructorAttendance() {
       </div>
     </AppLayout>
   );
-}
+};
 
 export default InstructorAttendance;

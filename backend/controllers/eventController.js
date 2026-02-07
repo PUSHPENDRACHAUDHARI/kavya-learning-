@@ -194,9 +194,11 @@ const getEvents = asyncHandler(async (req, res) => {
         };
     } else {
         // Students/parents: return all upcoming scheduled events that are not soft-deleted by instructors.
-        // Requirement: students must see events created by instructors and admins; therefore return all upcoming scheduled events.
+        // Include events from today onwards (even if they started earlier today)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         query = {
-            date: { $gte: new Date() },
+            date: { $gte: today },
             status: 'Scheduled',
             deletedByRole: { $ne: 'instructor' }
         };
@@ -247,9 +249,12 @@ const getMyEvents = asyncHandler(async (req, res) => {
 // @route   GET /api/events/upcoming
 // @access  Private
 const getUpcomingEvents = asyncHandler(async (req, res) => {
-    // Exclude events soft-deleted by instructors from general upcoming list
+    // Include events from today onwards (even if they started earlier today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const events = await Event.find({
-        date: { $gte: new Date() },
+        date: { $gte: today },
         status: 'Scheduled',
         deletedByRole: { $ne: 'instructor' }
     })
@@ -495,40 +500,54 @@ const deleteEvent = asyncHandler(async (req, res) => {
 // @route   POST /api/events/reminder
 // @access  Private
 const setReminder = asyncHandler(async (req, res) => {
-    const { eventTitle, eventDate } = req.body;
+    const { eventTitle, eventDate, reminderType } = req.body;
     const userId = req.user._id;
 
-    console.log('Setting reminder:', { eventTitle, eventDate, userId });
+    console.log('🔔 Setting reminder:', { eventTitle, eventDate, userId, reminderType });
 
     if (!eventTitle || !eventDate) {
+        console.error('❌ Missing eventTitle or eventDate');
         res.status(400);
         throw new Error('Event title and date are required');
     }
 
-    // Create a notification for the user
-    const Notification = require('../models/notificationModel');
-    
-    // Create a reminder notification with route pointing to the specific event
-    const reminder = await Notification.create({
-        userId,
-        title: eventTitle,
-        message: `Reminder: ${eventTitle} is scheduled for ${eventDate}`,
-        type: 'reminder',
-        // Include the event title in the route so the Schedule page can highlight it
-        route: `/schedule?eventTitle=${encodeURIComponent(eventTitle)}`,
-        unread: true
-    });
+    try {
+        // Create a notification for the user
+        const Notification = require('../models/notificationModel');
+        
+        // Create a reminder notification with route pointing to the specific event
+        const reminder = await Notification.create({
+            userId,
+            title: `Reminder: ${eventTitle}`,
+            message: `Your class "${eventTitle}" is scheduled for ${eventDate}`,
+            type: 'reminder',
+            reminderType: reminderType || 'upcoming_class',
+            // Include the event title and date in the route so the Schedule page can highlight it
+            route: `/schedule?eventTitle=${encodeURIComponent(eventTitle)}&eventDate=${encodeURIComponent(eventDate)}`,
+            unread: true,
+            eventTitle,
+            eventDate
+        });
 
-    console.log('Reminder created:', reminder._id);
+        console.log('✅ Reminder created successfully:', reminder._id);
 
-    res.status(200).json({
-        success: true,
-        message: `Reminder set for ${eventTitle}`,
-        reminder: {
-            _id: reminder._id,
-            reminded: true
-        }
-    });
+        res.status(200).json({
+            success: true,
+            message: `Reminder set for ${eventTitle}`,
+            reminder: {
+                _id: reminder._id,
+                reminded: true,
+                title: reminder.title,
+                message: reminder.message
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error creating reminder:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create reminder: ' + error.message
+        });
+    }
 });
 
 module.exports = {
