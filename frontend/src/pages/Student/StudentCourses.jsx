@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
+import LiveSessionManager from '../../components/LiveClass/LiveSessionManager';
 import './StudentCourses.css';
 
 const StudentCourses = () => {
@@ -127,6 +128,11 @@ const StudentCourses = () => {
               ) : (
                 <p>No lessons available for this course.</p>
               )}
+            </div>
+
+            {/* Live Sessions Section */}
+            <div style={{ marginTop: 24 }}>
+              <LiveSessionManager courseId={courseDetail.course._id} userRole="student" />
             </div>
             <button className="btn btn-secondary" onClick={() => navigate('/student/courses')} style={{ marginTop: 12 }}>
               Back to Courses

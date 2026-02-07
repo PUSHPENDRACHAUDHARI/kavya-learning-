@@ -47,4 +47,10 @@ router.post('/:eventId/leave', protect, authorize('student', 'parent'), (req, re
   return (async () => { try { await require('../controllers/attendanceController').leaveEvent(req, res); } catch (e) { next(e); } })();
 });
 
+// Live session attendance routes
+router.post('/live-sessions/:sessionId/join', protect, recordLiveSessionAttendance);
+router.post('/live-sessions/:sessionId/leave', protect, updateLiveSessionAttendance);
+router.get('/live-sessions/:sessionId', protect, getLiveSessionAttendance);
+router.get('/student/live-sessions', protect, getStudentLiveSessionAttendance);
+
 module.exports = router;
