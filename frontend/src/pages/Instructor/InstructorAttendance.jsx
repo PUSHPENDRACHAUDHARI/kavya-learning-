@@ -4,39 +4,72 @@ import axiosClient from '../../api/axiosClient';
 import './InstructorAttendance.css';
 
 function InstructorAttendance() {
-  const [courses, setCourses] = useState([]);
-  const [selectedCourse, setSelectedCourse] = useState('');
-  const [attendanceData, setAttendanceData] = useState(null);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceList, setAttendanceList] = useState([]);
+  const [attendanceEvent, setAttendanceEvent] = useState(null);
 
+  // Fetch all events on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await axiosClient.get('/api/instructor/courses');
-        const data = res.data && (res.data.data || res.data) ? (res.data.data || res.data) : [];
-        setCourses(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load instructor courses', err);
-        setCourses([]);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedCourse) return;
     (async () => {
       setLoading(true);
       try {
-        const res = await axiosClient.get(`/api/attendance/course/${selectedCourse}`);
-        setAttendanceData(res.data || null);
+        const res = await axiosClient.get('/api/events');
+        setEvents(Array.isArray(res.data) ? res.data : res.data?.data || []);
       } catch (err) {
-        console.error('Failed to load attendance', err);
-        setAttendanceData(null);
+        console.error('Failed to load events', err);
+        setEvents([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [selectedCourse]);
+  }, []);
+
+  // Handle View Attendance button click
+  const handleViewAttendance = async (event) => {
+    try {
+      setAttendanceLoading(true);
+      setAttendanceModalOpen(true);
+      setAttendanceEvent(event);
+      const api = await import('../../api');
+      const res = await api.getAttendanceForEvent(event._id);
+      if (res && Array.isArray(res.students)) setAttendanceList(res.students);
+      else setAttendanceList([]);
+    } catch (err) {
+      console.warn('Failed to load attendance', err);
+      setAttendanceList([]);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  // Format event time
+  const formatTime = (event) => {
+    const start = event.startTime || 'TBD';
+    const end = event.endTime || 'TBD';
+    return `${start} - ${end}`;
+  };
+
+  // Get event creator name
+  const getCreatorName = (event) => {
+    if (event.instructor) {
+      if (typeof event.instructor === 'string') return event.instructor;
+      return event.instructor.fullName || event.instructor.name || event.instructor.email || 'Unknown';
+    }
+    return 'Unknown';
+  };
+
+  // Format event date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch (e) {
+      return 'TBD';
+    }
+  };
 
   return (
     <AppLayout showGreeting={false}>
@@ -45,59 +78,94 @@ function InstructorAttendance() {
           <h2>Attendance</h2>
         </div>
 
-        <div style={{ marginTop: 18, marginBottom: 18 }}>
-          <label style={{ display: 'block', marginBottom: 8 }}>Select Subject</label>
-          <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)} className="form-control" style={{ maxWidth: 420 }}>
-            <option value="">-- Select a subject --</option>
-            {courses.map(c => (
-              <option key={c._id} value={c._id}>{c.title}</option>
-            ))}
-          </select>
-        </div>
+        {loading && <div style={{ marginTop: 18 }}>Loading events...</div>}
 
-        {loading && <div>Loading attendance...</div>}
-
-        {!loading && attendanceData && (
-          <div style={{ background: '#fff', padding: 18, borderRadius: 12 }}>
-            <h3 style={{ marginTop: 0 }}>{attendanceData.course?.title || '—'}</h3>
-            <div style={{ color: '#666', marginBottom: 12 }}>
-              <div><strong>Instructor:</strong> {attendanceData.instructor?.fullName || attendanceData.instructor?.name || '—'}</div>
-              <div><strong>Meeting Date:</strong> {attendanceData.event && attendanceData.event.date ? new Date(attendanceData.event.date).toLocaleString() : 'No scheduled meeting'}</div>
-            </div>
-
-            {attendanceData.event ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        {!loading && (
+          <div style={{ marginTop: 24 }}>
+            {events.length > 0 ? (
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
-                    <th style={{ padding: 8 }}>Student Name</th>
-                    <th style={{ padding: 8 }}>Email</th>
-                    <th style={{ padding: 8 }}>Status</th>
+                  <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Name</th>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Date</th>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Time</th>
+                    <th style={{ padding: 12, textAlign: 'center', fontWeight: 600 }}>Attendance</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {attendanceData.attendance && attendanceData.attendance.length > 0 ? (
-                    attendanceData.attendance.map(a => (
-                      <tr key={a.student._id} style={{ borderBottom: '1px solid #f1f1f1' }}>
-                        <td style={{ padding: 8 }}>{a.student.fullName}</td>
-                        <td style={{ padding: 8 }}>{a.student.email}</td>
-                        <td style={{ padding: 8 }}>{a.status}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={3} style={{ padding: 12 }}>No attendance data available</td>
+                  {events.map(event => (
+                    <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <td style={{ padding: 12 }}>{getCreatorName(event)}</td>
+                      <td style={{ padding: 12 }}>{formatDate(event.date)}</td>
+                      <td style={{ padding: 12 }}>{formatTime(event)}</td>
+                      <td style={{ padding: 12, textAlign: 'center' }}>
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => handleViewAttendance(event)}
+                        >
+                          View Attendance
+                        </button>
+                      </td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             ) : (
-              <div>No scheduled meeting for this subject.</div>
+              <div style={{ marginTop: 18, padding: 18, background: '#fff', borderRadius: 8 }}>
+                No events available
+              </div>
             )}
           </div>
         )}
 
-        {!loading && !attendanceData && selectedCourse && (
-          <div style={{ marginTop: 12 }}>No attendance data available</div>
+        {/* Attendance Modal - Reused from Schedule */}
+        {attendanceModalOpen && (
+          <div className="attendance-modal-backdrop" style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100 }} onClick={() => setAttendanceModalOpen(false)}>
+            <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e) => e.stopPropagation()}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title : 'Attendance'}</h5>
+                <div>
+                  <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
+                </div>
+              </div>
+              {attendanceLoading ? (
+                <div>Loading attendance…</div>
+              ) : (
+                <div>
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Present:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length} &nbsp;
+                    <strong>Absent:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length}
+                    &nbsp; <small>({attendanceList.length} enrolled)</small>
+                  </div>
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>Status</th>
+                        <th>Joined At</th>
+                        <th>Left At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceList.map(a => (
+                        <tr key={a.studentId || a.email || Math.random()}>
+                          <td>{a.name || a.email || a.studentId}</td>
+                          <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
+                          <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
+                          <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
+                        </tr>
+                      ))}
+                      {attendanceList.length === 0 && (
+                        <tr>
+                          <td colSpan={4}>No attendance records yet</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </AppLayout>
