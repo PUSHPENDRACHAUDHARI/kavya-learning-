@@ -7,7 +7,11 @@ const {
   getAttendanceForEvent,
   getAttendanceForStudent,
   recordAttendance,
-  getAttendanceForCourse
+  getAttendanceForCourse,
+  recordLiveSessionAttendance,
+  updateLiveSessionAttendance,
+  getLiveSessionAttendance,
+  getStudentLiveSessionAttendance
 } = require('../controllers/attendanceController');
 
 // debug controller (non-production)

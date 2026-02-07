@@ -516,5 +516,9 @@ module.exports = {
     // Keep status as-is; if they never joined, leave status unchanged (scheduler will mark absent later)
     await att.save();
     res.json({ success: true, leftAt: now });
-  })
+  }),
+  recordLiveSessionAttendance,
+  updateLiveSessionAttendance,
+  getLiveSessionAttendance,
+  getStudentLiveSessionAttendance
 };
