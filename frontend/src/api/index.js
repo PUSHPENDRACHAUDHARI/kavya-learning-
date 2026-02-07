@@ -58,12 +58,20 @@ export async function getEventsByDate(dateStr) {
   try {
     const all = await getEvents();
     if (!Array.isArray(all)) return [];
-    // Normalize incoming dateStr (YYYY-MM-DD)
-    const target = (dateStr || '').split('T')[0];
+    // Normalize incoming dateStr (YYYY-MM-DD) using local components to avoid UTC shifts
+    const formatLocalYYYYMMDD = (d) => {
+      try {
+        if (!d) return null;
+        const dt = (d instanceof Date) ? d : (typeof d === 'string' && d.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) ? new Date(d) : new Date(d);
+        if (isNaN(dt)) return null;
+        return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      } catch (e) { return null; }
+    };
+    const target = formatLocalYYYYMMDD(dateStr) || (dateStr || '').split('T')[0];
     return all.filter(e => {
       try {
         if (!e || !e.date) return false;
-        const d = new Date(e.date).toISOString().split('T')[0];
+        const d = formatLocalYYYYMMDD(e.date);
         return d === target;
       } catch (err) {
         return false;
@@ -263,6 +271,32 @@ export async function getUpcomingClasses(limit = 20, page = 1) {
   return res.json();
 }
 
+// ===== Attendance =====
+export async function joinAttendance(eventId) {
+  const res = await fetch(`${BASE}/attendance/join`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ eventId }) });
+  return res.json();
+}
+
+export async function getAttendanceForEvent(eventId) {
+  const res = await fetch(`${BASE}/attendance/event/${eventId}`, { headers: authHeaders() });
+  return res.json();
+}
+
+export async function getAttendanceForStudent(studentId) {
+  const res = await fetch(`${BASE}/attendance/student/${studentId}`, { headers: authHeaders() });
+  return res.json();
+}
+
+export async function accessAttendance(eventId) {
+  const res = await fetch(`${BASE}/attendance/access`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ eventId }) });
+  return res.json();
+}
+
+export async function leaveAttendance(eventId) {
+  const res = await fetch(`${BASE}/attendance/${eventId}/leave`, { method: 'POST', headers: authHeaders() });
+  return res.json();
+}
+
 // Lightweight helper to get a list of instructors. The backend may not expose
 // a public instructors list; return empty array when unavailable.
 export async function getInstructors() {
@@ -328,4 +362,7 @@ export default {
   ,getUpcomingClasses
   ,getDashboardFeed
   ,getInstructors
+  ,joinAttendance
+  ,getAttendanceForEvent
+  ,getAttendanceForStudent
 };

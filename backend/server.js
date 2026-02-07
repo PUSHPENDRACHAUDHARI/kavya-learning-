@@ -273,7 +273,13 @@ try {
   setIo(io);
   // attach socket handlers
   require('./sockets/messageSocket')(io);
-  require('./sockets/liveSessionSocket')(io);
+  // Start attendance scheduler (marks absentees after event end)
+  try {
+    const { startAttendanceScheduler } = require('./utils/attendanceScheduler');
+    startAttendanceScheduler(io);
+  } catch (e) {
+    console.warn('Failed to start attendance scheduler', e.message || e);
+  }
   console.log('➡️ Socket.IO initialized');
 } catch (err) {
   console.warn('Socket.IO not initialized:', err?.message || err);

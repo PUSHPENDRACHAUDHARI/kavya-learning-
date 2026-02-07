@@ -5,6 +5,69 @@ import { Calendar, Bell } from "lucide-react";
 import "../assets/schedule.css";
 import AppLayout from "../components/AppLayout";
 import axiosClient from '../api/axiosClient';
+
+// Date helpers: parse YYYY-MM-DD as local date (avoid UTC parsing that can shift day)
+const parseDateOnly = (dateStr) => {
+  if (!dateStr) return null;
+  try {
+    const s = (dateStr || '').toString().trim();
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) {
+      const year = parseInt(m[1], 10);
+      const monthIndex = parseInt(m[2], 10) - 1;
+      const day = parseInt(m[3], 10);
+      const dt = new Date(year, monthIndex, day, 0, 0, 0, 0);
+      return isNaN(dt) ? null : dt;
+    }
+    // Fallback: try Date constructor
+    const d = new Date(dateStr);
+    return isNaN(d) ? null : d;
+  } catch (e) { return null; }
+};
+
+const toLocalDateForCompare = (dateVal) => {
+  if (!dateVal) return null;
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return parseDateOnly(dateVal);
+  try { const d = new Date(dateVal); return isNaN(d) ? null : d; } catch (e) { return null; }
+};
+
+const formatLocalYYYYMMDD = (dateVal) => {
+  const d = (dateVal && dateVal instanceof Date) ? dateVal : parseDateOnly(dateVal);
+  if (!d) return null;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
+// Time helpers: convert between 24-hour input (HH:MM) and 12-hour display (h:MM AM/PM)
+const to12HourString = (time24) => {
+  if (!time24) return '';
+  const m = String(time24).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  let hh = parseInt(m[1], 10);
+  const mm = String(m[2]).padStart(2, '0');
+  const period = hh >= 12 ? 'PM' : 'AM';
+  let hour12 = hh % 12;
+  if (hour12 === 0) hour12 = 12;
+  return `${hour12}:${mm} ${period}`;
+};
+
+const normalizeStoredTimeToInput = (stored) => {
+  // stored may be "13:30" or "1:30 PM" or other forms; return 24-hour HH:MM and period
+  if (!stored) return { time24: '', period: 'AM' };
+  const s = String(stored).trim();
+  const m = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return { time24: '', period: 'AM' };
+  let hh = parseInt(m[1], 10);
+  const mm = m[2];
+  const mer = m[3] ? m[3].toUpperCase() : null;
+  if (mer) {
+    if (mer === 'AM' && hh === 12) hh = 0;
+    else if (mer === 'PM' && hh !== 12) hh += 12;
+  }
+  if (isNaN(hh)) return { time24: '', period: 'AM' };
+  const time24 = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  const period = hh >= 12 ? 'PM' : 'AM';
+  return { time24, period };
+};
  
 // Helper available to modal and other early code: prefer enrolledStudents, then maxStudents
 const getStudentsText = (evt) => {
@@ -81,26 +144,50 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
   useEffect(() => {
     // If editing, populate form with event data
     if (eventToEdit && isOpen) {
+      const formattedDate = eventToEdit.date ? formatLocalYYYYMMDD(eventToEdit.date) : '';
+      const startNorm = normalizeStoredTimeToInput(eventToEdit.startTime);
+      const endNorm = normalizeStoredTimeToInput(eventToEdit.endTime);
+      // Coerce instructor/course to id strings when populated objects are returned
+      const isObjectIdLike = (val) => typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val);
+      let instrVal = '';
+      let instrNameFromInstructor = '';
+      if (eventToEdit.instructor) {
+        if (typeof eventToEdit.instructor === 'object' && (eventToEdit.instructor._id || eventToEdit.instructor)) {
+          instrVal = eventToEdit.instructor._id || eventToEdit.instructor;
+        } else if (typeof eventToEdit.instructor === 'string') {
+          // If it's a 24-char hex string treat as ObjectId, otherwise it's a free-text name
+          if (isObjectIdLike(eventToEdit.instructor)) instrVal = eventToEdit.instructor;
+          else instrNameFromInstructor = eventToEdit.instructor;
+        }
+      }
+      const courseVal = eventToEdit.course && (eventToEdit.course._id || eventToEdit.course)
+        ? (eventToEdit.course._id || eventToEdit.course)
+        : '';
+      // Determine a display name for the instructor search input
+      const instrDisplay = eventToEdit.instructorName || instrNameFromInstructor || (eventToEdit.instructor && (eventToEdit.instructor.fullName || eventToEdit.instructor.name || eventToEdit.instructor.email)) || '';
       setForm({
         title: eventToEdit.title || "",
-          instructor: eventToEdit.instructor || "", // This line remains unchanged
-        instructorName: eventToEdit.instructorName || "",
-        course: eventToEdit.course || "",
+        instructor: instrVal,
+        instructorName: eventToEdit.instructorName || instrNameFromInstructor || "",
+        course: courseVal,
         type: eventToEdit.type || "Live Class",
-        date: eventToEdit.date || "",
-        startTime: eventToEdit.startTime ? eventToEdit.startTime.split(' ')[0] : "",
-        startPeriod: eventToEdit.startTime ? eventToEdit.startTime.split(' ')[1] || "AM" : "AM",
-        endTime: eventToEdit.endTime ? eventToEdit.endTime.split(' ')[0] : "",
-        endPeriod: eventToEdit.endTime ? eventToEdit.endTime.split(' ')[1] || "AM" : "AM",
+        date: formattedDate,
+        startTime: startNorm.time24 || "",
+        startPeriod: startNorm.period || "AM",
+        endTime: endNorm.time24 || "",
+        endPeriod: endNorm.period || "AM",
         location: eventToEdit.location || "",
         maxStudents: eventToEdit.maxStudents || 30,
         meetLink: eventToEdit.meetLink || "",
       });
-      setInstructorSearch("");
+      setInstructorSearch(instrDisplay);
     } else if (presetDate && isOpen) {
-      // presetDate is a Date object
-      const iso = new Date(presetDate).toISOString().slice(0,10);
-      setForm((f) => ({ ...f, date: iso }));
+      // presetDate may be a Date or a date-string; build YYYY-MM-DD from local components
+      const pd = parseDateOnly(presetDate);
+      if (pd) {
+        const iso = `${pd.getFullYear()}-${String(pd.getMonth()+1).padStart(2,'0')}-${String(pd.getDate()).padStart(2,'0')}`;
+        setForm((f) => ({ ...f, date: iso }));
+      }
       setInstructorSearch("");
     }
     // Fetch instructors when modal opens
@@ -157,30 +244,45 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       }
     }
 
-    // Prevent past dates (client-side)
-    const selected = new Date(form.date);
+    // Prevent past dates (client-side) — parse date as local YYYY-MM-DD
+    const parseDateOnly = (dateStr) => {
+      if (!dateStr) return null;
+      const m = dateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (!m) return null;
+      const year = parseInt(m[1], 10);
+      const monthIndex = parseInt(m[2], 10) - 1;
+      const day = parseInt(m[3], 10);
+      const dt = new Date(year, monthIndex, day, 0, 0, 0, 0);
+      return isNaN(dt) ? null : dt;
+    };
+
+    const selected = parseDateOnly(form.date);
     const today = new Date();
     today.setHours(0,0,0,0);
-    if (selected < today) {
+    if (!selected || selected < today) {
       setFormError('Cannot create events for past dates');
       return;
     }
-    // Build start and end datetimes from date + time + AM/PM
+
+    // Build start and end datetimes from date + time + AM/PM using local construction
     const buildDateTime = (dateStr, timeStr, period) => {
       if (!dateStr || !timeStr) return null;
-      const [hhStr, mmStr] = (timeStr || '').split(':');
-      let hh = parseInt(hhStr, 10);
-      const mm = mmStr ? parseInt(mmStr, 10) : 0;
+      const mTime = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (!mTime) return null;
+      let hh = parseInt(mTime[1], 10);
+      const mm = parseInt(mTime[2], 10);
       if (isNaN(hh) || isNaN(mm)) return null;
-      // If period provided (AM/PM), and time appears to be 1-12, apply it.
       if (period && (period === 'AM' || period === 'PM')) {
         if (hh === 12 && period === 'AM') hh = 0;
-        else if (period === 'PM' && hh !== 12 && hh <= 12) hh += 12;
+        else if (period === 'PM' && hh !== 12) hh += 12;
       }
-      const dt = new Date(dateStr);
-      if (isNaN(dt)) return null;
-      dt.setHours(hh, mm, 0, 0);
-      return dt;
+      const mDate = dateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (!mDate) return null;
+      const year = parseInt(mDate[1], 10);
+      const monthIndex = parseInt(mDate[2], 10) - 1;
+      const day = parseInt(mDate[3], 10);
+      const dt = new Date(year, monthIndex, day, hh, mm, 0, 0);
+      return isNaN(dt) ? null : dt;
     };
 
     const startDateTime = buildDateTime(form.date, form.startTime, form.startPeriod);
@@ -194,23 +296,27 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       return;
     }
 
-    const timeRange = `${form.startTime} ${form.startPeriod} - ${form.endTime} ${form.endPeriod}`;
+    // Normalize times: convert 24-hour input values to 12-hour strings for storage/display
+    const startTimeString = to12HourString(form.startTime) || (form.startTime && `${form.startTime}`) || '';
+    const endTimeString = to12HourString(form.endTime) || (form.endTime && `${form.endTime}`) || '';
+    const timeRange = `${startTimeString} - ${endTimeString}`;
     const newEvent = userRole === 'student' ? {
       title: form.title,
-         instructor: form.instructorName || form.instructor,
+      instructor: form.instructorName || form.instructor,
       type: form.type,
       date: form.date,
-      startTime: `${form.startTime} ${form.startPeriod}`,
-      endTime: `${form.endTime} ${form.endPeriod}`
+      startTime: startTimeString,
+      endTime: endTimeString
     } : {
       title: form.title,
+      instructor: form.instructorName || form.instructor || null,
       course: form.course || null,
-      date: form.date,
-      startTime: `${form.startTime} ${form.startPeriod}`,
-      endTime: `${form.endTime} ${form.endPeriod}`,
-      location: form.location || "Online",
-      maxStudents: form.maxStudents,
       type: form.type,
+      date: form.date,
+      startTime: startTimeString,
+      endTime: endTimeString,
+      location: form.location || '',
+      maxStudents: form.maxStudents || 30,
       meetLink: form.meetLink || null,
     };
     // If admin provided a free-text instructorName prefer that
@@ -257,8 +363,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                     instructor: res.instructorName || (res.instructor && (res.instructor._id || res.instructor)) || form.instructorName || form.instructor || null,
                     course: res.course || form.course || null,
                     date: res.date || form.date,
-                    startTime: res.startTime || `${form.startTime} ${form.startPeriod}`,
-                    endTime: res.endTime || `${form.endTime} ${form.endPeriod}`,
+                    startTime: res.startTime || (newEvent.startTime || startTimeString),
+                    endTime: res.endTime || (newEvent.endTime || endTimeString),
                     location: res.location || form.location || 'Online',
                     maxStudents: res.maxStudents || form.maxStudents || 0,
                     meetLink: res.meetLink || form.meetLink || null,
@@ -279,7 +385,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
             createdByUserId: res.createdByUserId && (res.createdByUserId._id || res.createdByUserId) ? (res.createdByUserId._id || res.createdByUserId).toString() : null,
             createdByRole: res.createdByRole || null,
             date: res.date ? new Date(res.date).toLocaleDateString() : form.date,
-            time: `${res.startTime || form.startTime} - ${res.endTime || form.endTime}`,
+            time: `${res.startTime || newEvent.startTime || startTimeString} - ${res.endTime || newEvent.endTime || endTimeString}`,
             location: res.location || (form.location || 'Online'),
             students: getStudentsText(res),
             type: res.type || form.type,
@@ -300,8 +406,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                 instructor: newEvent.instructorName || newEvent.instructor || form.instructorName || form.instructor || null,
                 course: newEvent.course || form.course || null,
                 date: newEvent.date || form.date,
-                startTime: newEvent.startTime || `${form.startTime} ${form.startPeriod}`,
-                endTime: newEvent.endTime || `${form.endTime} ${form.endPeriod}`,
+                startTime: newEvent.startTime || startTimeString,
+                endTime: newEvent.endTime || endTimeString,
                 location: newEvent.location || form.location || 'Online',
                 maxStudents: newEvent.maxStudents || form.maxStudents || 0,
                 meetLink: newEvent.meetLink || form.meetLink || null,
@@ -314,7 +420,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                   createdByUserId: shared.createdByUserId && (shared.createdByUserId._id || shared.createdByUserId) ? (shared.createdByUserId._id || shared.createdByUserId).toString() : null,
                   createdByRole: shared.createdByRole || null,
                   date: shared.date ? new Date(shared.date).toLocaleDateString() : (newEvent.date || form.date),
-                  time: `${shared.startTime || newEvent.startTime || form.startTime} - ${shared.endTime || newEvent.endTime || form.endTime}`,
+                  time: `${shared.startTime || newEvent.startTime || startTimeString} - ${shared.endTime || newEvent.endTime || endTimeString}`,
                   location: shared.location || newEvent.location || form.location || 'Online',
                   students: getStudentsText(shared),
                   type: shared.type || newEvent.type || form.type,
@@ -334,8 +440,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
           const computeLocalExpiry = (dateStr, timeStr) => {
             try {
               if (!dateStr) return null;
-              const base = new Date(dateStr);
-              if (isNaN(base)) return null;
+              const base = parseDateOnly(dateStr);
+              if (!base) return null;
               const parts = (timeStr || '').split('-').map(p => p.trim());
               const endPart = parts[1] || parts[0] || '';
               const m = endPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
@@ -377,8 +483,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                 instructor: newEvent.instructor || form.instructor || null,
                 course: newEvent.course || form.course || null,
                 date: newEvent.date || form.date,
-                startTime: newEvent.startTime || `${form.startTime} ${form.startPeriod}`,
-                endTime: newEvent.endTime || `${form.endTime} ${form.endPeriod}`,
+                startTime: newEvent.startTime || startTimeString,
+                endTime: newEvent.endTime || endTimeString,
                 location: newEvent.location || form.location || 'Online',
                 maxStudents: newEvent.maxStudents || form.maxStudents || 0,
                 meetLink: newEvent.meetLink || form.meetLink || null,
@@ -391,7 +497,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                   createdByUserId: shared.createdByUserId && (shared.createdByUserId._id || shared.createdByUserId) ? (shared.createdByUserId._id || shared.createdByUserId).toString() : null,
                   createdByRole: shared.createdByRole || null,
                   date: shared.date ? new Date(shared.date).toLocaleDateString() : (newEvent.date || form.date),
-                  time: `${shared.startTime || newEvent.startTime || form.startTime} - ${shared.endTime || newEvent.endTime || form.endTime}`,
+                  time: `${shared.startTime || newEvent.startTime || startTimeString} - ${shared.endTime || newEvent.endTime || endTimeString}`,
                   location: shared.location || newEvent.location || form.location || 'Online',
                   students: getStudentsText(shared),
                   type: shared.type || newEvent.type || form.type,
@@ -411,8 +517,8 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         const computeLocalExpiry = (dateStr, timeStr) => {
           try {
             if (!dateStr) return null;
-            const base = new Date(dateStr);
-            if (isNaN(base)) return null;
+            const base = parseDateOnly(dateStr);
+            if (!base) return null;
             const parts = (timeStr || '').split('-').map(p => p.trim());
             const endPart = parts[1] || parts[0] || '';
             const m = endPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
@@ -709,6 +815,13 @@ function Schedule() {
   const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || 'student');
   const [presetDate, setPresetDate] = useState(null);
   const [remindersSet, setRemindersSet] = useState(new Set());
+
+  const reminderKey = (title, dateVal) => {
+    try {
+      const d = formatLocalYYYYMMDD(dateVal);
+      return `${(title || '').trim()}@@${d || ''}`;
+    } catch (e) { return `${(title || '').trim()}@@`; }
+  };
   const location = useLocation();
   const [highlightEventTitle, setHighlightEventTitle] = useState(null);
   const [selectedDateEvents, setSelectedDateEvents] = useState([]);
@@ -718,6 +831,11 @@ function Schedule() {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
+  // Attendance modal state
+  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceList, setAttendanceList] = useState([]);
+  const [attendanceEvent, setAttendanceEvent] = useState(null);
   // Background-sync storage key for locally-created events
   const LOCAL_EVENTS_KEY = 'schedule_local_events_v1';
 
@@ -738,8 +856,8 @@ function Schedule() {
   const computeLocalExpiry = (dateStr, timeStr) => {
     try {
       if (!dateStr) return null;
-      const base = new Date(dateStr);
-      if (isNaN(base)) return null;
+      const base = parseDateOnly(dateStr);
+      if (!base) return null;
       const parts = (timeStr || '').split('-').map(p => p.trim());
       const endPart = parts[1] || parts[0] || '';
       const m = endPart.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
@@ -758,6 +876,92 @@ function Schedule() {
     }
   };
 
+  const formatDateTime = (d) => {
+    if (!d) return '-';
+    try { return new Date(d).toLocaleString(); } catch (e) { return '-'; }
+  };
+
+  const downloadAttendancePdf = async () => {
+    if (!attendanceEvent || !Array.isArray(attendanceList)) return;
+    const sessionName = (attendanceEvent.title || 'session').replace(/[^a-z0-9\-\_ ]/gi, '').replace(/\s+/g, '_');
+    const dateStr = formatLocalYYYYMMDD(attendanceEvent.date) || formatLocalYYYYMMDD(new Date());
+    const filename = `attendance_${sessionName}_${dateStr}.pdf`;
+
+    // Prepare rows
+    const rows = attendanceList.map(s => ([
+      s.name || s.email || s.studentId,
+      (s.status || '').toString().charAt(0).toUpperCase() + (s.status || '').toString().slice(1),
+      s.joinedAt ? formatDateTime(s.joinedAt) : '-',
+      s.leftAt ? formatDateTime(s.leftAt) : '-',
+    ]));
+
+    // Session metadata lines
+    const meta = [
+      ['Attendance Report'],
+      [`Session: ${attendanceEvent.title || ''}`],
+      [`Date: ${attendanceEvent.date ? new Date(attendanceEvent.date).toLocaleDateString() : '-'}`],
+      [`Time: ${attendanceEvent.startTime || '-'} - ${attendanceEvent.endTime || '-'}`],
+      [`Instructor: ${getInstructorName(attendanceEvent)}`]
+    ];
+
+    try {
+      const { jsPDF } = await import('jspdf');
+      let doc = new jsPDF();
+
+      // Try to use autoTable if available
+      let autoTable = null;
+      try {
+        const at = await import('jspdf-autotable');
+        autoTable = at.default || at;
+      } catch (e) {
+        autoTable = null;
+      }
+
+      // Title & metadata
+      doc.setFontSize(16);
+      doc.text('Attendance Report', 14, 20);
+      doc.setFontSize(11);
+      let y = 30;
+      meta.slice(1).forEach(line => { doc.text(line[0], 14, y); y += 7; });
+
+      // Counts summary
+      const presentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length;
+      const absentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length;
+      doc.text(`Present: ${presentCount}    Absent: ${absentCount}    Total: ${attendanceList.length}`, 14, y + 4);
+
+      // Table
+      if (autoTable && doc.autoTable) {
+        doc.autoTable({ head: [['Student Name', 'Status', 'Joined At', 'Left At']], body: rows, startY: y + 12, styles: { fontSize: 10 } });
+      } else if (autoTable) {
+        // some builds export plugin but not attached — call directly
+        autoTable(doc, { head: [['Student Name', 'Status', 'Joined At', 'Left At']], body: rows, startY: y + 12, styles: { fontSize: 10 } });
+      } else {
+        // Fallback: render rows as plain text with spacing
+        y += 18;
+        doc.setFontSize(10);
+        const colX = [14, 90, 140, 180];
+        doc.text('Student Name', colX[0], y);
+        doc.text('Status', colX[1], y);
+        doc.text('Joined At', colX[2], y);
+        doc.text('Left At', colX[3], y);
+        y += 6;
+        rows.forEach(r => {
+          if (y > 270) { doc.addPage(); y = 20; }
+          doc.text(String(r[0] || ''), colX[0], y);
+          doc.text(String(r[1] || ''), colX[1], y);
+          doc.text(String(r[2] || ''), colX[2], y);
+          doc.text(String(r[3] || ''), colX[3], y);
+          y += 6;
+        });
+      }
+
+      doc.save(filename);
+    } catch (err) {
+      console.error('PDF generation failed', err);
+      alert('Failed to generate PDF. Please install `jspdf` and `jspdf-autotable` (optional) or try again.');
+    }
+  };
+
   // `getStudentsText` is defined above so the modal can call it early.
  
   // Do not load global events — users should only see their own events.
@@ -768,7 +972,7 @@ function Schedule() {
   useEffect(() => {
     (async () => {
       const today = new Date();
-      const dateStr = today.toISOString().split('T')[0];
+      const dateStr = formatLocalYYYYMMDD(today);
       setSelectedDate(today);
 
       try {
@@ -1176,8 +1380,8 @@ function Schedule() {
     setPresetDate(new Date(day));
     setSelectedDate(new Date(day));
    
-    // Format date as YYYY-MM-DD for API
-    const dateStr = day.toISOString().split('T')[0];
+    // Format date as YYYY-MM-DD for API using local components (avoid toISOString UTC conversion)
+    const dateStr = formatLocalYYYYMMDD(day);
    
       try {
       const api = await import("../api");
@@ -1237,230 +1441,115 @@ function Schedule() {
 
   // Fetch upcoming classes for the logged-in user and refresh periodically
   const fetchUpcomingClasses = async () => {
-    // Wait for authenticated profile before fetching user-specific upcoming classes
-    if (!userProfile || !userProfile._id) {
-      console.warn('Skipping fetchUpcomingClasses until user profile is ready');
-      return;
-    }
+    // Wait for authenticated profile
+    if (!userProfile) return;
 
     const fetchId = ++latestUpcomingFetchId.current;
-
     try {
       const api = await import('../api');
-      const res = await api.getUpcomingClasses(20, 1);
-        if (res && res.success) {
-        setUpcomingCount(res.upcomingCount || 0);
-        const mapped = (res.upcoming || []).map((e) => ({
-          title: e.title,
-              instructor: getInstructorName(e),
-          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
-          createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
-          createdByRole: e.createdByRole || null,
-          deletedByRole: e.deletedByRole || null,
-          date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
-          time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
-          location: e.location || 'Online',
-          students: getStudentsText(e),
-          type: e.type || 'Live Class',
-          status: e.status || 'Scheduled',
-          meetLink: e.meetLink || null,
-          _id: e._id
-        })).filter(e => {
-          // Filter out events based on deletion permissions
-          // If not deleted, show to everyone
-          if (!e.deletedByRole) return true;
-          
-          // If deleted by instructor: only admin sees it
-          if (e.deletedByRole === 'instructor') {
-            return (userRole === 'admin' || userRole === 'sub-admin');
-          }
-          
-          // If deleted by admin: nobody sees it (shouldn't happen as admin hard-deletes)
-          return false;
-        });
-        // If the current user is an instructor (or admin), also include events returned
-        // by the ``/api/events/my-events`` endpoint so instructor-created events
-        // are visible across browsers/sessions.
-        let instructorMapped = [];
+      // Use role-aware endpoint /api/events which returns appropriate events per role
+      const res = await api.getEvents();
+      console.log('Schedule.fetchUpcomingClasses: /api/events returned', Array.isArray(res) ? res.length : typeof res, res && res.slice ? res.map(r => r._id) : res);
+      if (!Array.isArray(res)) {
+        // Fallback: do not clear UI
+        return;
+      }
+
+      const nowMidnight = new Date();
+      nowMidnight.setHours(0,0,0,0);
+
+      const mapped = res.filter(e => {
         try {
-          const role = (userProfile && (userProfile.role || userRole)) || userRole;
-          if (role === 'instructor' || role === 'admin' || role === 'sub-admin') {
-            const my = await api.getMyEvents();
-            if (Array.isArray(my)) {
-              instructorMapped = my.map((e) => ({
-                title: e.title,
-                  instructor: getInstructorName(e),
-                instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
-                createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
-                createdByRole: e.createdByRole || null,
-                deletedByRole: e.deletedByRole || null,
-                date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
-                time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
-                location: e.location || 'Online',
-                students: getStudentsText(e),
-                type: e.type || 'Live Class',
-                status: e.status || 'Scheduled',
-                meetLink: e.meetLink || null,
-                _id: e._id
-              }));
-            }
-          }
-        } catch (err) {
-          // ignore instructor-specific fetch failures
-        }
-        // Preserve any locally-created events that haven't expired.
-        // If the server returns a duplicate (same title+date+time) but the local
-        // copy is the creator's local copy (has _local + createdByUserId equal
-        // to current user), prefer the local copy so owner-only actions remain.
-        const now = Date.now();
-        const storedLocal = loadLocalEventsFromStorage();
-        const validLocal = (storedLocal || []).filter(l => l && l._local).filter(l => {
-          try {
-            if (!l.localExpiresAt) return true;
-            return new Date(l.localExpiresAt).getTime() > now;
-          } catch (err) { return true; }
-        });
+          // keep upcoming or today's events; admin may see past events too but we keep scheduled
+          const d = e.date ? new Date(e.date) : null;
+          if (!d || isNaN(d)) return false;
+          return d >= nowMidnight || (userRole === 'admin');
+        } catch (err) { return false; }
+      }).map(e => ({
+        title: e.title,
+        instructor: getInstructorName(e),
+        instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
+        createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
+        createdByRole: e.createdByRole || null,
+        deletedByRole: e.deletedByRole || null,
+        date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
+        time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
+        location: e.location || 'Online',
+        students: getStudentsText(e),
+        type: e.type || 'Live Class',
+        status: e.status || 'Scheduled',
+        meetLink: e.meetLink || null,
+        _id: e._id
+      }));
 
-        // Replace server items with matching local creator copies when appropriate
-        const localMap = new Map((validLocal || []).map(l => [eventKey(l), l]));
-        const merged = mapped.map(m => {
-          try {
-            const key = eventKey(m);
-            const match = localMap.get(key);
-            if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
-              return { ...match };
-            }
-          } catch (err) { /* ignore and fall back to server item */ }
-          return m;
-        });
+      // Filter out soft-deleted events for non-admins
+      const visible = mapped.filter(ev => {
+        if (!ev.deletedByRole) return true;
+        if (ev.deletedByRole === 'instructor') return (userRole === 'admin' || userRole === 'sub-admin');
+        return false;
+      });
 
-        // Add any valid local items that don't have a server duplicate
-        const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
-        if (fetchId !== latestUpcomingFetchId.current) return;
-        const mergedFinal = mergeIncomingWithLocal(merged.concat(instructorMapped).concat(localOnly));
-        setUpcomingClasses(mergedFinal);
-        
-        // Fetch reminders from backend notifications
-        await fetchRemindersFromBackend();
-        return;
-      }
-
-      // If server didn't return structured upcoming response, still try to include shared events
-      // Fetch shared events and merge them into the list so instructor-created events appear across browsers
-      try {
-        const sharedAll = await api.getSharedEvents();
-        if (Array.isArray(sharedAll) && sharedAll.length) {
-          // Keep only upcoming (today or later)
-          const now = new Date();
-          const upcomingShared = sharedAll.filter(se => {
-            try {
-              const d = new Date(se.date);
-              return !isNaN(d) && d >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            } catch (e) { return true; }
-          }).map(se => ({
-            title: se.title,
-            instructor: getInstructorName(se),
-            instructorId: se.instructor && (se.instructor._id || se.instructor) ? (se.instructor._id || se.instructor).toString() : null,
-            createdByUserId: se.createdByUserId && (se.createdByUserId._id || se.createdByUserId) ? (se.createdByUserId._id || se.createdByUserId).toString() : null,
-            createdByRole: se.createdByRole || null,
-            date: se.date ? new Date(se.date).toLocaleDateString() : 'TBD',
-            time: `${se.startTime || 'TBD'} - ${se.endTime || 'TBD'}`,
-            location: se.location || 'Online',
-            students: getStudentsText(se),
-            type: se.type || 'Live Class',
-            status: se.status || 'Scheduled',
-            _id: se._id
-          }));
-
-          // Merge with existing upcomingClasses, dedupe by eventKey/_id
-          if (fetchId !== latestUpcomingFetchId.current) return;
-          setUpcomingClasses(prev => {
-            const existing = Array.isArray(prev) ? prev : [];
-            const map = new Map();
-            existing.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(eventKey(it), it); });
-            upcomingShared.forEach(it => { if (it._id) map.set(it._id.toString(), it); else map.set(eventKey(it), it); });
-            const mergedList = Array.from(map.values());
-            setUpcomingCount(mergedList.length || 0);
-            return mergedList;
-          });
-        }
-      } catch (e) {
-        // ignore shared fetch errors
-      }
-
-      if (Array.isArray(res)) {
-        const mapped = res.map((e) => ({
-          title: e.title,
-          instructor: getInstructorName(e),
-          instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
-          date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
-          time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
-          location: e.location || 'Online',
-          students: getStudentsText(e),
-          type: e.type || 'Live Class',
-          status: e.status || 'Scheduled',
-          _id: e._id
-        }));
-
-        // Preserve any locally-created events (stored or in-memory) that haven't expired and are not duplicated by server
-        const now = Date.now();
-        const storedLocal = loadLocalEventsFromStorage();
-        const inMemoryLocal = (upcomingClasses || []).filter(l => l && l._local);
-        const combinedLocal = (storedLocal || []).concat(inMemoryLocal || []);
-        const validLocal = (combinedLocal || []).filter(l => l && l._local).filter(l => {
-          try {
-            if (!l.localExpiresAt) return true;
-            return new Date(l.localExpiresAt).getTime() > now;
-          } catch (err) { return true; }
-        });
-
-        // Use eventKey to detect duplicates robustly
-        const localOnly = (validLocal || []).filter(l => !mapped.some(m => eventKey(m) === eventKey(l)));
-
-        // Prefer local creator copies when a server item exists with same key
-        const localMap = new Map((validLocal || []).map(l => [eventKey(l), l]));
-        const merged = mapped.map(m => {
-          try {
-            const key = eventKey(m);
-            const match = localMap.get(key);
-            if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
-              return { ...match };
-            }
-          } catch (err) { /* ignore and fall back to server item */ }
-          return m;
-        });
-
-        const finalList = [...merged, ...localOnly];
-        if (fetchId !== latestUpcomingFetchId.current) return;
-        const mergedFinal = mergeIncomingWithLocal(finalList);
-        setUpcomingCount(mergedFinal.length || 0);
-        setUpcomingClasses(mergedFinal);
-
-        // Fetch reminders from backend notifications
-        await fetchRemindersFromBackend();
-        return;
-      }
-
-      // Server didn't return structured upcoming events; preserve any local events
+      // Merge with local events and preferences
+      const now = Date.now();
       const storedLocal = loadLocalEventsFromStorage();
-      const inMemoryLocal = (upcomingClasses || []).filter(l => l && l._local);
-      const validLocal = (storedLocal || []).concat(inMemoryLocal || []).filter(l => l && l._local);
+      const validLocal = (storedLocal || []).filter(l => l && l._local).filter(l => {
+        try { if (!l.localExpiresAt) return true; return new Date(l.localExpiresAt).getTime() > now; } catch (err) { return true; }
+      });
+      // For Instructor role we must not rely on cached local events to avoid stale/ghost UI.
+      // Only include local-only events for non-instructor roles (students/admin may keep pending local items).
+      const localMap = (userRole === 'instructor') ? new Map() : new Map((validLocal || []).map(l => [eventKey(l), l]));
+      const merged = visible.map(m => {
+        try {
+          const key = eventKey(m);
+          const match = localMap.get(key);
+          if (match && match._local && userProfile && userProfile._id && match.createdByUserId && match.createdByUserId.toString() === userProfile._id.toString()) {
+            return { ...match };
+          }
+        } catch (err) { }
+        return m;
+      });
+
+      const localOnly = (userRole === 'instructor') ? [] : (validLocal || []).filter(l => !merged.some(m => eventKey(m) === eventKey(l)));
       if (fetchId !== latestUpcomingFetchId.current) return;
-      const mergedFinal = mergeIncomingWithLocal(validLocal || []);
+      // Deduplicate server items by _id first, then merge with local-only items
+      const byId = new Map();
+      merged.forEach(it => {
+        try {
+          if (it && it._id) byId.set(it._id.toString(), it);
+          else byId.set(eventKey(it), it);
+        } catch (e) { /* ignore */ }
+      });
+      localOnly.forEach(l => {
+        try {
+          const key = l._id ? l._id.toString() : eventKey(l);
+          if (!byId.has(key)) byId.set(key, l);
+        } catch (e) {}
+      });
+
+      const mergedFinal = Array.from(byId.values()).sort((a,b) => {
+        try {
+          const da = toLocalDateForCompare(a && a.date ? a.date : a);
+          const db = toLocalDateForCompare(b && b.date ? b.date : b);
+          if (!da || !db) return 0;
+          return da - db;
+        } catch (e) { return 0; }
+      });
+      console.log('Schedule.fetchUpcomingClasses: mergedFinal length', mergedFinal.length);
       setUpcomingCount(mergedFinal.length || 0);
       setUpcomingClasses(mergedFinal);
+      await fetchRemindersFromBackend();
+      return;
     } catch (err) {
       console.warn('Failed to fetch upcoming classes', err.message || err);
-      // Do not clear UI state on transient errors; keep whatever user already sees.
     }
   };
 
   // --- Local events persistence & background sync helpers ---
   const normalizeDateForKey = (dateStr) => {
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d)) return (dateStr || '').toString().trim();
-      return d.toISOString().split('T')[0];
+      const d = parseDateOnly(dateStr);
+      if (!d) return (dateStr || '').toString().trim();
+      return formatLocalYYYYMMDD(d);
     } catch (e) { return (dateStr || '').toString().trim(); }
   };
 
@@ -1576,7 +1665,13 @@ function Schedule() {
   const removeLocalEventFromStorage = (evt) => {
     try {
       const existing = loadLocalEventsFromStorage();
-      const filtered = existing.filter(e => !(e.title === evt.title && e.date === evt.date && e.time === evt.time));
+      const filtered = existing.filter(e => {
+        try {
+          // Remove by matching server _id when present
+          if (evt && evt._id && e && e._id && e._id === evt._id) return false;
+          return !(e.title === evt.title && e.date === evt.date && e.time === evt.time);
+        } catch (err) { return true; }
+      });
       saveLocalEventsToStorage(filtered);
     } catch (err) {
       console.warn('Failed to remove local event from storage', err);
@@ -1749,12 +1844,17 @@ function Schedule() {
     socket.on('events:changed', (payload) => {
       try {
         if (!payload) return;
+        // Deleted events include immediate removal
         if (payload.action === 'deleted' && payload._id) {
+          // Remove immediately from UI, then refetch authoritative list to avoid stale/ghost items
           removeEventById(payload._id.toString());
+          (async () => { try { await fetchUpcomingClasses(); } catch (e) { console.warn('Failed to refresh after delete event', e); } })();
+          return;
         }
-        if (payload.action === 'updated' && payload._id) {
-          // simple approach: refetch upcoming classes to refresh updated event
-          (async () => { try { const api = await import('../api'); await fetchUpcomingClasses(); } catch (e) {} })();
+        // For created/updated events, refetch upcoming classes (role-aware)
+        if ((payload.action === 'updated' || payload.action === 'created') && payload._id) {
+          (async () => { try { await fetchUpcomingClasses(); } catch (e) { console.warn('Failed to refresh after events:changed', e); } })();
+          return;
         }
       } catch (e) { console.warn('Invalid events:changed payload', e); }
     });
@@ -1784,6 +1884,8 @@ function Schedule() {
           alert(data.message || 'Failed to delete event');
           return;
         }
+          // Refresh authoritative list after deleting to avoid stale UI
+          try { await fetchUpcomingClasses(); } catch (e) { console.warn('Failed to refresh classes after delete', e); }
       }
 
       // Remove locally (from state and localStorage) using normalized id comparison
@@ -1848,26 +1950,29 @@ function Schedule() {
         const reminderTitles = new Set();
         const notifications = notificationsData.notifications || notificationsData;
         
-        // Filter and extract reminder event titles from all notifications
+        // Filter and extract reminder event keys (title + date) from all notifications
         notifications.forEach(notif => {
           try {
             // Primary: Extract from route if it contains eventTitle parameter
             if (notif.route && typeof notif.route === 'string') {
-              const match = notif.route.match(/eventTitle=([^&]*)/);
-              if (match && match[1]) {
-                const decodedTitle = decodeURIComponent(match[1]);
-                if (decodedTitle) {
-                  reminderTitles.add(decodedTitle);
-                  console.log('Added reminder title from route:', decodedTitle);
-                  return;
-                }
+              const titleMatch = notif.route.match(/eventTitle=([^&]*)/);
+              const dateMatch = notif.route.match(/eventDate=([^&]*)/);
+              const decodedTitle = titleMatch && titleMatch[1] ? decodeURIComponent(titleMatch[1]) : null;
+              const decodedDate = dateMatch && dateMatch[1] ? decodeURIComponent(dateMatch[1]) : null;
+              if (decodedTitle) {
+                const key = reminderKey(decodedTitle, decodedDate || '');
+                reminderTitles.add(key);
+                console.log('Added reminder key from route:', key);
+                return;
               }
             }
             
             // Fallback: Use notification title if it looks like an event title
             if (notif.title && typeof notif.title === 'string' && notif.title.length > 0) {
-              reminderTitles.add(notif.title);
-              console.log('Added reminder title from notification title:', notif.title);
+              // We don't have date info here; store title-only key (won't match dated keys)
+              const key = reminderKey(notif.title, '');
+              reminderTitles.add(key);
+              console.log('Added reminder key from notification title:', key);
             }
           } catch (err) {
             console.warn('Error processing notification:', notif, err);
@@ -2088,6 +2193,14 @@ function Schedule() {
                         fontWeight: "600",
                         marginBottom: "4px",
                       }}
+                      onClick={async () => {
+                        try {
+                          if (userRole === 'student' || userRole === 'parent') {
+                            const api = await import('../api');
+                            await api.accessAttendance(classItem._id).catch(() => {});
+                          }
+                        } catch (e) { /* ignore */ }
+                      }}
                     >
                       {classItem.title}
                     </h6>
@@ -2134,7 +2247,7 @@ function Schedule() {
                         <Bell size={16} />
                         Already Done
                       </button>
-                    ) : remindersSet.has(classItem.title) ? (
+                    ) : (remindersSet.has(reminderKey(classItem.title, classItem.date)) || classItem.reminderSet) ? (
                       <button
                         className="btn btn-success btn-sm d-flex align-items-center gap-1"
                         disabled
@@ -2167,7 +2280,18 @@ function Schedule() {
                             });
 
                             if (reminderRes.ok) {
-                              setRemindersSet(prev => new Set([...prev, classItem.title]));
+                              const key = reminderKey(classItem.title, classItem.date);
+                              setRemindersSet(prev => new Set([...Array.from(prev || []), key]));
+                              // mark locally so newly-created/unsynced events update immediately
+                              setUpcomingClasses(prev => (prev || []).map(ev => {
+                                try {
+                                  const same = (ev._id && classItem._id && ev._id.toString() === classItem._id.toString()) || (ev.title === classItem.title && (ev.date || '') === (classItem.date || ''));
+                                  if (same) return { ...ev, reminderSet: true };
+                                } catch (e) {}
+                                return ev;
+                              }));
+                              // notify other listeners/tabs
+                              window.dispatchEvent(new Event('reminderSet'));
                               alert(`✅ Reminder set for ${classItem.title}`);
                             } else {
                               const errData = await reminderRes.json();
@@ -2256,19 +2380,91 @@ function Schedule() {
                   <button
                     className="join-meet-btn"
                     onClick={async () => {
+                      // Time-guard: block join if now is before event start
                       try {
-                        // Try to record attendance; don't block join on failure
-                        await axiosClient.post(`/api/attendance/events/${classItem._id}/record`).catch(() => {});
+                        const pd = parseDateOnly(classItem.date);
+                        const startRaw = classItem.startTime || (classItem.time ? classItem.time.split('-')[0].trim() : null);
+                        const norm = normalizeStoredTimeToInput(startRaw);
+                        if (pd && norm && norm.time24) {
+                          const [hhStr, mmStr] = norm.time24.split(':');
+                          const startDT = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), parseInt(hhStr, 10), parseInt(mmStr, 10), 0, 0);
+                          if (Date.now() < startDT.getTime()) {
+                            // not started yet
+                            alert('Class has not started yet');
+                            return;
+                          }
+                        }
+
+                      } catch (guardErr) {
+                        // if time-guard parse fails, fall back to allowing join
+                        console.warn('Join time check failed, allowing join by default', guardErr);
+                      }
+
+                      let win = null;
+                      try {
+                        // Dynamic import of api helpers
+                        const api = await import('../api');
+                        // Mark present (joinedAt) but don't block opening the meet
+                        try {
+                          await api.joinAttendance(classItem._id).catch(() => {});
+                        } catch (e) { /* ignore */ }
+
+                        // Open the meet in a new window and monitor it.
+                        win = window.open(classItem.meetLink, '_blank');
+
+                        // Poll for the window being closed to record leftAt
+                        if (win) {
+                          const poll = setInterval(async () => {
+                            try {
+                              if (win.closed) {
+                                clearInterval(poll);
+                                try {
+                                  await api.leaveAttendance(classItem._id).catch(() => {});
+                                } catch (e) { /* ignore */ }
+                              }
+                            } catch (e) {
+                              clearInterval(poll);
+                            }
+                          }, 1000);
+                        } else {
+                          // If popup blocked, fall back to opening in same tab and record leave on unload
+                          window.location.href = classItem.meetLink;
+                        }
                       } catch (err) {
-                        console.warn('Failed to record attendance', err?.response?.data || err.message || err);
-                      } finally {
-                        window.open(classItem.meetLink, '_blank');
+                        console.warn('Failed to record attendance or open meet', err?.response?.data || err.message || err);
+                        // Best-effort: open link
+                        try { window.open(classItem.meetLink, '_blank'); } catch (e) { window.location.href = classItem.meetLink; }
                       }
                     }}
                   >
                     Join Meet
                   </button>
                 ) : null}
+                {/* View attendance for instructors/admins */}
+                {(userRole === 'instructor' || userRole === 'admin' || userRole === 'sub-admin') && (
+                  <button
+                    className="btn btn-sm btn-outline-primary ms-2"
+                    onClick={async () => {
+                      try {
+                        setAttendanceLoading(true);
+                        setAttendanceModalOpen(true);
+                        setAttendanceEvent(classItem);
+                        const api = await import('../api');
+                        const res = await api.getAttendanceForEvent(classItem._id);
+                        // New backend returns { totalStudents, presentCount, absentCount, students }
+                        if (res && Array.isArray(res.students)) setAttendanceList(res.students);
+                        else setAttendanceList([]);
+                      } catch (err) {
+                        console.warn('Failed to load attendance', err);
+                        setAttendanceList([]);
+                      } finally {
+                        setAttendanceLoading(false);
+                      }
+                    }}
+                  >
+                    View Attendance
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -2309,6 +2505,53 @@ function Schedule() {
           </div>
         </div>
  
+        {/* Attendance Modal */}
+        {attendanceModalOpen && (
+          <div className="attendance-modal-backdrop" style={{ position: 'fixed', left:0,top:0,right:0,bottom:0,background:'rgba(0,0,0,0.4)', zIndex:1100 }} onClick={() => setAttendanceModalOpen(false)}>
+            <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e)=>e.stopPropagation()}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title : 'Attendance'}</h5>
+                <div>
+                  <button className="btn btn-sm btn-primary me-2" onClick={downloadAttendancePdf}>Download PDF</button>
+                  <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
+                </div>
+              </div>
+              {attendanceLoading ? <div>Loading attendance…</div> : (
+                <div>
+                  <div style={{ marginBottom: 12 }}>
+                    <strong>Present:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length} &nbsp; 
+                    <strong>Absent:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length}
+                    &nbsp; <small>({attendanceList.length} enrolled)</small>
+                  </div>
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>Status</th>
+                        <th>Joined At</th>
+                        <th>Left At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceList.map(a => (
+                        <tr key={a.studentId || a.email || Math.random()}>
+                          <td>{a.name || a.email || a.studentId}</td>
+                          <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
+                          <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
+                          <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
+                        </tr>
+                      ))}
+                      {attendanceList.length === 0 && (
+                        <tr><td colSpan={4}>No attendance records yet</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Add Event Modal */}
         <AddEventModal
           isOpen={isAddOpen}
