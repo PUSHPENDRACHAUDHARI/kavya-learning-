@@ -3,6 +3,37 @@ const asyncHandler = require('express-async-handler');
 const Course = require('../models/courseModel');
 const { getIo } = require('../sockets/io');
 
+// Helper: parse time string like "HH:MM" or "H:MM AM/PM" into { hh, mm }
+const parseTimeString = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const m = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (!m) return null;
+    let hh = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10);
+    const mer = m[3] ? m[3].toUpperCase() : null;
+    if (mer) {
+        if (mer === 'AM' && hh === 12) hh = 0;
+        else if (mer === 'PM' && hh !== 12) hh += 12;
+    }
+    if (isNaN(hh) || isNaN(mm)) return null;
+    return { hh, mm };
+};
+
+// Helper: build a local Date from YYYY-MM-DD and a time string (uses parseTimeString)
+const buildDateTime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return null;
+    const parsed = parseTimeString(timeStr);
+    if (!parsed) return null;
+    const m = dateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return null;
+    const year = parseInt(m[1], 10);
+    const monthIndex = parseInt(m[2], 10) - 1;
+    const day = parseInt(m[3], 10);
+    const dt = new Date(year, monthIndex, day, parsed.hh, parsed.mm, 0, 0);
+    if (isNaN(dt)) return null;
+    return dt;
+};
+
 // @desc    Create new event
 // @route   POST /api/events
 // @access  Private (Instructor/Admin)
@@ -38,12 +69,17 @@ const createEvent = asyncHandler(async (req, res) => {
 
     const buildDateTime = (dateStr, timeStr) => {
         if (!dateStr || !timeStr) return null;
-        const datePart = new Date(dateStr);
-        if (isNaN(datePart)) return null;
         const parsed = parseTimeString(timeStr);
         if (!parsed) return null;
-        datePart.setHours(parsed.hh, parsed.mm, 0, 0);
-        return datePart;
+        // Expect dateStr in YYYY-MM-DD; construct Date using local timezone
+        const m = dateStr.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (!m) return null;
+        const year = parseInt(m[1], 10);
+        const monthIndex = parseInt(m[2], 10) - 1;
+        const day = parseInt(m[3], 10);
+        const dt = new Date(year, monthIndex, day, parsed.hh, parsed.mm, 0, 0);
+        if (isNaN(dt)) return null;
+        return dt;
     };
 
     const startDT = buildDateTime(date, startTime);
@@ -57,18 +93,20 @@ const createEvent = asyncHandler(async (req, res) => {
 
         // Allow admin to provide either an instructor ObjectId or a free-text instructorName.
         const payload = {
-                title,
-                type,
-                date,
-                startTime,
-                endTime,
-                description: req.body.description || '',
-                location,
-                maxStudents,
-                course,
-                meetLink,
-                createdByUserId: req.user._id,
-                createdByRole: req.user.role
+            title,
+            type,
+            // Store the full start datetime in `date` so queries comparing against
+            // `new Date()` correctly include same-day events that occur later today.
+            date: startDT,
+            startTime,
+            endTime,
+            description: req.body.description || '',
+            location,
+            maxStudents,
+            course,
+            meetLink,
+            createdByUserId: req.user._id,
+            createdByRole: req.user.role
         };
 
         // If request provided instructor (id), and it looks like an ObjectId, use it.
@@ -104,11 +142,26 @@ const createEvent = asyncHandler(async (req, res) => {
 
         const created = await Event.create(payload);
     if (created) {
+        try {
+            console.log('Event created:', { id: created._id.toString(), title: created.title, createdBy: req.user._id.toString(), role: req.user.role });
+        } catch (e) {}
         // Populate fields for immediate client use
         const event = await Event.findById(created._id)
             .populate('instructor', 'fullName email')
             .populate('createdByUserId', 'fullName email')
             .populate('course', 'title');
+        // Emit socket event so other clients can refresh their lists
+        try {
+            const io = getIo();
+            if (io) {
+                io.emit('events:changed', { action: 'created', _id: event._id.toString() });
+                const instrId = event.instructor && (event.instructor._id || event.instructor) ? (event.instructor._id || event.instructor).toString() : null;
+                if (instrId) {
+                    io.to(`user:${instrId}`).emit('event:created', { _id: event._id.toString() });
+                }
+            }
+        } catch (err) { console.warn('Failed to emit socket event for create:', err); }
+
         res.status(201).json(event);
     } else {
         res.status(400);
@@ -140,7 +193,8 @@ const getEvents = asyncHandler(async (req, res) => {
             ]
         };
     } else {
-        // Students/parents: only upcoming scheduled events
+        // Students/parents: return all upcoming scheduled events that are not soft-deleted by instructors.
+        // Requirement: students must see events created by instructors and admins; therefore return all upcoming scheduled events.
         query = {
             date: { $gte: new Date() },
             status: 'Scheduled',
@@ -153,6 +207,11 @@ const getEvents = asyncHandler(async (req, res) => {
         .populate('createdByUserId', 'fullName email')
         .populate('course', 'title')
         .sort({ date: 1 });
+
+    // Debug logging to help trace student visibility issues
+    try {
+        console.log(`getEvents: role=${role} userId=${userId} returning ${Array.isArray(events) ? events.length : 0} events`);
+    } catch (e) {}
 
     res.json(events);
 });
@@ -282,8 +341,13 @@ const updateEvent = asyncHandler(async (req, res) => {
     const updatePayload = { ...req.body };
     const isObjectIdLike = (val) => typeof val === 'string' && /^[0-9a-fA-F]{24}$/.test(val);
     if (req.user.role !== 'admin') {
-        // prevent non-admins from setting instructorName
-        delete updatePayload.instructorName;
+        // If a non-admin supplied `instructor` as a non-ObjectId string (e.g., a free-text name),
+        // move it into `instructorName` so Mongoose won't attempt to cast it to ObjectId.
+        if (updatePayload.instructor && !isObjectIdLike(updatePayload.instructor)) {
+            updatePayload.instructorName = updatePayload.instructor;
+            delete updatePayload.instructor;
+        }
+        // allow owner/instructor to preserve or set a free-text instructorName when editing their own event
     } else {
         // admin submitted instructor: ensure it's either an ObjectId or else ignore (they may use instructorName)
         if (updatePayload.instructor && !isObjectIdLike(updatePayload.instructor)) {
@@ -302,6 +366,13 @@ const updateEvent = asyncHandler(async (req, res) => {
             } catch (err) {
                 // ignore lookup failure
             }
+        }
+
+        // If updating both date and startTime, ensure we store the combined datetime
+        // in the `date` field so student-facing queries work the same as on create.
+        if (updatePayload.date && updatePayload.startTime) {
+            const parsedStart = buildDateTime(updatePayload.date, updatePayload.startTime);
+            if (parsedStart) updatePayload.date = parsedStart;
         }
 
         const updatedRaw = await Event.findByIdAndUpdate(
@@ -337,7 +408,14 @@ const deleteEvent = asyncHandler(async (req, res) => {
     // Admin can delete any event - hard delete from all panels
     if (req.user.role === 'admin' || req.user.role === 'sub-admin') {
         // Admin permanently deletes the event from database
-        await Event.findByIdAndDelete(req.params.id);
+        try {
+            await Event.findByIdAndDelete(req.params.id);
+            console.log('Admin deleted event:', { id: req.params.id, deletedBy: req.user._id.toString() });
+        } catch (err) {
+            console.error('Admin delete failed for event id:', req.params.id, err);
+            res.status(500);
+            throw new Error('Failed to delete event');
+        }
 
         // Notify affected users via sockets so their UIs can remove the event
         try {
@@ -361,8 +439,9 @@ const deleteEvent = asyncHandler(async (req, res) => {
         }
 
         res.json({ message: 'Event permanently deleted from all panels' });
-    } 
-    // Instructor can only soft-delete (mark as deletedByRole: 'instructor')
+    }
+    // Instructor deletes: require ownership and perform permanent deletion so it is removed
+    // from all panels (instructor, student, admin) to avoid stale admin views.
     else if (req.user.role === 'instructor') {
         // Instructor may only delete events they created (instructor field)
         let ownerId = null;
@@ -375,23 +454,37 @@ const deleteEvent = asyncHandler(async (req, res) => {
             res.status(403);
             throw new Error('Forbidden: instructors can only delete their own events');
         }
-        // Instructor soft-deletes - event is hidden from instructor and student panels but visible to admin
-        event.deletedByRole = 'instructor';
-        await event.save();
-        // Emit sockets so other clients (including admin) know about the deletion
+
+        // Perform hard delete so the event is removed from all views and the DB.
+        try {
+            await Event.findByIdAndDelete(req.params.id);
+        } catch (err) {
+            res.status(500);
+            throw new Error('Failed to delete event');
+        }
+
+        // Emit sockets so other clients (including admin and enrolled students) remove the event
         try {
             const io = getIo();
             if (io) {
                 const instrId = event.instructor && (event.instructor._id || event.instructor) ? (event.instructor._id || event.instructor).toString() : null;
                 if (instrId) io.to(`user:${instrId}`).emit('event:deleted', { _id: event._id.toString(), deletedByRole: 'instructor' });
+
+                // Notify enrolled students
+                if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+                    event.enrolledStudents.forEach(sid => {
+                        try { const id = sid && (sid._id || sid).toString ? (sid._id || sid).toString() : sid; if (id) io.to(`user:${id}`).emit('event:deleted', { _id: event._id.toString(), deletedByRole: 'instructor' }); } catch (e) {}
+                    });
+                }
+
                 io.emit('events:changed', { action: 'deleted', _id: event._id.toString() });
             }
         } catch (err) {
             console.warn('Failed to emit socket event for instructor delete:', err);
         }
 
-        res.json({ message: 'Event deleted from instructor and student views' });
-    } 
+        res.json({ message: 'Event permanently deleted from all panels' });
+    }
     else {
         res.status(403);
         throw new Error('Forbidden: only instructor or admin may delete this event');
