@@ -21,6 +21,18 @@ const notificationSchema = new mongoose.Schema(
       enum: ['course', 'assignment', 'achievement', 'event', 'message', 'general', 'reminder'],
       default: 'general',
     },
+    reminderType: {
+      type: String,
+      default: null,
+    },
+    eventTitle: {
+      type: String,
+      default: null,
+    },
+    eventDate: {
+      type: String,
+      default: null,
+    },
     route: {
       type: String,
       default: null,

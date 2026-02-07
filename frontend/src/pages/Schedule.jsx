@@ -752,14 +752,30 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Max Students</label>
-                  <input
-                    type="number"
-                    min="1"
-                    name="maxStudents"
-                    value={form.maxStudents}
-                    onChange={handleChange}
-                    className="form-control"
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      name="maxStudents"
+                      value={form.maxStudents}
+                      onChange={handleChange}
+                      className="form-range"
+                      style={{ flex: 1, height: '6px', cursor: 'pointer' }}
+                    />
+                    <span style={{
+                      minWidth: '45px',
+                      padding: '6px 12px',
+                      background: '#e9ecef',
+                      borderRadius: '6px',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      textAlign: 'center',
+                      color: '#2b6cb0'
+                    }}>
+                      {form.maxStudents}
+                    </span>
+                  </div>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Subject (Course)</label>
@@ -836,6 +852,8 @@ function Schedule() {
   const [attendanceLoading, setAttendanceLoading] = useState(false);
   const [attendanceList, setAttendanceList] = useState([]);
   const [attendanceEvent, setAttendanceEvent] = useState(null);
+  const [attendanceEditing, setAttendanceEditing] = useState(false);
+  const [attendanceChanges, setAttendanceChanges] = useState({});
   // Background-sync storage key for locally-created events
   const LOCAL_EVENTS_KEY = 'schedule_local_events_v1';
 
@@ -1254,12 +1272,15 @@ function Schedule() {
         createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
         createdByRole: e.createdByRole || null,
         date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
+        rawDate: e.date || null,
         time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
         location: e.location || 'Online',
         students: getStudentsText(e),
         type: e.type || 'Live Class',
         status: e.status || 'Scheduled',
         meetLink: e.meetLink || null,
+        course: e.course || null,
+        courseId: e.course && (e.course._id || e.course) ? (e.course._id || e.course) : null,
         _id: e._id
       }));
 
@@ -1473,12 +1494,15 @@ function Schedule() {
         createdByRole: e.createdByRole || null,
         deletedByRole: e.deletedByRole || null,
         date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
+        rawDate: e.date || null,
         time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
         location: e.location || 'Online',
         students: getStudentsText(e),
         type: e.type || 'Live Class',
         status: e.status || 'Scheduled',
         meetLink: e.meetLink || null,
+        course: e.course || null,
+        courseId: e.course && (e.course._id || e.course) ? (e.course._id || e.course) : null,
         _id: e._id
       }));
 
@@ -2266,6 +2290,8 @@ function Schedule() {
                               return;
                             }
 
+                            console.log('🔔 Setting reminder for:', { title: classItem.title, date: classItem.date });
+
                             const reminderRes = await fetch('/api/events/reminder', {
                               method: 'POST',
                               headers: {
@@ -2279,9 +2305,15 @@ function Schedule() {
                               })
                             });
 
+                            console.log('Response status:', reminderRes.status);
+
+                            const responseData = await reminderRes.json();
+                            console.log('Response data:', responseData);
+
                             if (reminderRes.ok) {
                               const key = reminderKey(classItem.title, classItem.date);
                               setRemindersSet(prev => new Set([...Array.from(prev || []), key]));
+                              
                               // mark locally so newly-created/unsynced events update immediately
                               setUpcomingClasses(prev => (prev || []).map(ev => {
                                 try {
@@ -2290,15 +2322,18 @@ function Schedule() {
                                 } catch (e) {}
                                 return ev;
                               }));
+                              
                               // notify other listeners/tabs
                               window.dispatchEvent(new Event('reminderSet'));
+                              console.log('✅ Reminder set successfully');
                               alert(`✅ Reminder set for ${classItem.title}`);
                             } else {
-                              const errData = await reminderRes.json();
-                              alert(errData.message || 'Failed to set reminder');
+                              const errMessage = responseData.message || 'Failed to set reminder';
+                              console.error('❌ Error response:', errMessage);
+                              alert(errMessage);
                             }
                           } catch (err) {
-                            console.warn('Error setting reminder:', err);
+                            console.error('❌ Error setting reminder:', err);
                             alert('Error setting reminder: ' + err.message);
                           }
                         }}
@@ -2380,18 +2415,38 @@ function Schedule() {
                   <button
                     className="join-meet-btn"
                     onClick={async () => {
-                      // Time-guard: block join if now is before event start
+                      // Time-guard: validate join is within event time window (start time <= now <= end time)
                       try {
-                        const pd = parseDateOnly(classItem.date);
-                        const startRaw = classItem.startTime || (classItem.time ? classItem.time.split('-')[0].trim() : null);
-                        const norm = normalizeStoredTimeToInput(startRaw);
-                        if (pd && norm && norm.time24) {
-                          const [hhStr, mmStr] = norm.time24.split(':');
-                          const startDT = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), parseInt(hhStr, 10), parseInt(mmStr, 10), 0, 0);
-                          if (Date.now() < startDT.getTime()) {
-                            // not started yet
-                            alert('Class has not started yet');
-                            return;
+                        if (classItem.rawDate && classItem.time) {
+                          const pd = new Date(classItem.rawDate);
+                          if (!isNaN(pd)) {
+                            const parts = classItem.time.split('-').map(p => p.trim());
+                            const startRaw = parts[0];
+                            const endRaw = parts[1];
+                            
+                            const startNorm = normalizeStoredTimeToInput(startRaw);
+                            const endNorm = normalizeStoredTimeToInput(endRaw);
+                            
+                            if (startNorm && startNorm.time24 && endNorm && endNorm.time24) {
+                              const [startHH, startMM] = startNorm.time24.split(':').map(x => parseInt(x, 10));
+                              const [endHH, endMM] = endNorm.time24.split(':').map(x => parseInt(x, 10));
+                              
+                              const startDT = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), startHH, startMM, 0, 0);
+                              const endDT = new Date(pd.getFullYear(), pd.getMonth(), pd.getDate(), endHH, endMM, 0, 0);
+                              const now = Date.now();
+                              
+                              // Block join if BEFORE start time
+                              if (now < startDT.getTime()) {
+                                alert('Class has not started yet');
+                                return;
+                              }
+                              // Block join if AFTER end time
+                              if (now > endDT.getTime()) {
+                                alert('Class has ended');
+                                return;
+                              }
+                              // Within time window - proceed to open meet
+                            }
                           }
                         }
 
@@ -2440,7 +2495,7 @@ function Schedule() {
                     Join Meet
                   </button>
                 ) : null}
-                {/* View attendance for instructors/admins */}
+                {/* View/Mark attendance for instructors/admins */}
                 {(userRole === 'instructor' || userRole === 'admin' || userRole === 'sub-admin') && (
                   <button
                     className="btn btn-sm btn-outline-primary ms-2"
@@ -2449,20 +2504,88 @@ function Schedule() {
                         setAttendanceLoading(true);
                         setAttendanceModalOpen(true);
                         setAttendanceEvent(classItem);
-                        const api = await import('../api');
-                        const res = await api.getAttendanceForEvent(classItem._id);
-                        // New backend returns { totalStudents, presentCount, absentCount, students }
-                        if (res && Array.isArray(res.students)) setAttendanceList(res.students);
-                        else setAttendanceList([]);
+                        setAttendanceEditing(false);
+                        setAttendanceChanges({});
+                        
+                        // Fetch enrolled students and attendance records for this event
+                        const token = localStorage.getItem('token');
+                        
+                        // Fetch attendance records from backend
+                        const attResponse = await fetch(`/api/attendance/event/${classItem._id}/details`, {
+                          headers: {
+                            Authorization: `Bearer ${token}`
+                          }
+                        });
+
+                        let allStudents = [];
+                        
+                        if (attResponse.ok) {
+                          const attData = await attResponse.json();
+                          if (attData.attendance && Array.isArray(attData.attendance)) {
+                            allStudents = attData.attendance;
+                          }
+                        }
+                        
+                        // Try to fetch all enrolled students for the course to get complete list
+                        try {
+                          if (classItem.course || classItem.courseId) {
+                            const courseId = classItem.course?._id || classItem.course || classItem.courseId;
+                            const enrollResponse = await fetch(`/api/courses/${courseId}/students`, {
+                              headers: { Authorization: `Bearer ${token}` }
+                            }).catch(() => null);
+                            
+                            if (enrollResponse && enrollResponse.ok) {
+                              const enrollData = await enrollResponse.json();
+                              const enrolledStudents = enrollData.students || enrollData.data || [];
+                              
+                              // Create attendance map from records
+                              const attMap = new Map();
+                              allStudents.forEach(student => {
+                                const key = student.studentId || student.student?._id;
+                                if (key) attMap.set(key.toString(), student);
+                              });
+                              
+                              // Merge enrolled students with attendance records
+                              const mergedList = enrolledStudents.map(enrolledStudent => {
+                                const studentId = enrolledStudent._id || enrolledStudent.id;
+                                const existing = attMap.get(studentId?.toString());
+                                
+                                if (existing) {
+                                  return existing;
+                                } else {
+                                  // Create entry for enrolled student with default "Absent" status
+                                  return {
+                                    _id: studentId,
+                                    studentId: studentId,
+                                    studentName: enrolledStudent.fullName || enrolledStudent.name || 'Unknown',
+                                    studentEmail: enrolledStudent.email || 'N/A',
+                                    status: 'Absent',
+                                    joinedAt: null,
+                                    leftAt: null
+                                  };
+                                }
+                              });
+                              
+                              setAttendanceList(mergedList.length > 0 ? mergedList : allStudents);
+                            } else {
+                              setAttendanceList(allStudents);
+                            }
+                          } else {
+                            setAttendanceList(allStudents);
+                          }
+                        } catch (err) {
+                          console.warn('Failed to fetch enrolled students, using attendance records only', err);
+                          setAttendanceList(allStudents);
+                        }
                       } catch (err) {
-                        console.warn('Failed to load attendance', err);
+                        console.error('Failed to load attendance', err);
                         setAttendanceList([]);
                       } finally {
                         setAttendanceLoading(false);
                       }
                     }}
                   >
-                    View Attendance
+                    {classItem.status === 'Completed' ? '📋 Mark Attendance' : '👁️ View Attendance'}
                   </button>
                 )}
               </div>
@@ -2505,47 +2628,157 @@ function Schedule() {
           </div>
         </div>
  
-        {/* Attendance Modal */}
+        {/* Enhanced Attendance Modal */}
         {attendanceModalOpen && (
-          <div className="attendance-modal-backdrop" style={{ position: 'fixed', left:0,top:0,right:0,bottom:0,background:'rgba(0,0,0,0.4)', zIndex:1100 }} onClick={() => setAttendanceModalOpen(false)}>
+          <div className="attendance-modal-backdrop" style={{ position: 'fixed', left:0,top:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)', zIndex:1100 }} onClick={() => setAttendanceModalOpen(false)}>
             <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e)=>e.stopPropagation()}>
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title : 'Attendance'}</h5>
-                <div>
-                  <button className="btn btn-sm btn-primary me-2" onClick={downloadAttendancePdf}>Download PDF</button>
-                  <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
-                </div>
+                <h5 style={{ margin: 0 }}>
+                  {attendanceEditing ? '✏️ Mark Attendance' : '📋 Attendance'} - {attendanceEvent ? attendanceEvent.title : 'Event'}
+                </h5>
+                <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>✕ Close</button>
               </div>
-              {attendanceLoading ? <div>Loading attendance…</div> : (
+
+              {attendanceLoading ? (
+                <div style={{ textAlign:'center', padding:'40px' }}>Loading attendance…</div>
+              ) : (
                 <div>
-                  <div style={{ marginBottom: 12 }}>
-                    <strong>Present:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length} &nbsp; 
-                    <strong>Absent:</strong> {attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length}
-                    &nbsp; <small>({attendanceList.length} enrolled)</small>
+                  {/* Summary */}
+                  <div style={{ marginBottom: 16, padding: '12px', background: '#f0f9ff', borderRadius: 6 }}>
+                    <strong>Summary:</strong> 
+                    <span style={{marginLeft:'8px'}}>
+                      Present: {attendanceList.filter(a => (attendanceChanges[a._id]?.status || a.status || '').toLowerCase() === 'present').length} / 
+                      Absent: {attendanceList.filter(a => (attendanceChanges[a._id]?.status || a.status || '').toLowerCase() === 'absent').length}
+                      ({attendanceList.length} total)
+                    </span>
                   </div>
-                  <table className="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>Student</th>
-                        <th>Status</th>
-                        <th>Joined At</th>
-                        <th>Left At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {attendanceList.map(a => (
-                        <tr key={a.studentId || a.email || Math.random()}>
-                          <td>{a.name || a.email || a.studentId}</td>
-                          <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
-                          <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
-                          <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
-                        </tr>
-                      ))}
-                      {attendanceList.length === 0 && (
-                        <tr><td colSpan={4}>No attendance records yet</td></tr>
+
+                  {/* Edit Mode Toggle (for completed classes) */}
+                  {attendanceEvent && attendanceEvent.status === 'Completed' && (userRole === 'instructor' || userRole === 'admin') && (
+                    <div style={{marginBottom: '16px'}}>
+                      <button 
+                        className={`btn btn-sm ${attendanceEditing ? 'btn-warning' : 'btn-primary'} me-2`}
+                        onClick={() => {
+                          if (attendanceEditing) {
+                            setAttendanceChanges({});
+                          }
+                          setAttendanceEditing(!attendanceEditing);
+                        }}
+                      >
+                        {attendanceEditing ? '❌ Cancel' : '✏️ Edit Attendance'}
+                      </button>
+                      
+                      {attendanceEditing && (
+                        <button 
+                          className="btn btn-sm btn-success me-2"
+                          onClick={async () => {
+                            try {
+                              setAttendanceLoading(true);
+                              const token = localStorage.getItem('token');
+                              
+                              const attendanceData = attendanceList.map(student => ({
+                                studentId: student.studentId,
+                                studentName: student.studentName || student.student?.fullName || 'Unknown',
+                                studentEmail: student.studentEmail || student.student?.email || 'unknown@email.com',
+                                status: attendanceChanges[student._id]?.status || student.status || 'Absent'
+                              }));
+
+                              console.log('🎓 Sending attendance:', { eventId: attendanceEvent._id, attendanceList: attendanceData });
+
+                              const response = await fetch('/api/attendance/mark-attendance', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  Authorization: `Bearer ${token}`
+                                },
+                                body: JSON.stringify({
+                                  eventId: attendanceEvent._id,
+                                  attendanceList: attendanceData
+                                })
+                              });
+
+                              if (response.ok) {
+                                const result = await response.json();
+                                console.log('✅ Attendance marked:', result);
+                                alert(`✅ Attendance marked for ${result.marked} students`);
+                                setAttendanceEditing(false);
+                                setAttendanceChanges({});
+                              } else {
+                                const error = await response.json();
+                                throw new Error(error.message || 'Failed to mark attendance');
+                              }
+                            } catch (err) {
+                              console.error('❌ Error marking attendance:', err);
+                              alert('Error marking attendance: ' + err.message);
+                            } finally {
+                              setAttendanceLoading(false);
+                            }
+                          }}
+                        >
+                          ✅ Save Attendance
+                        </button>
                       )}
-                    </tbody>
-                  </table>
+                    </div>
+                  )}
+
+                  {/* Attendance List */}
+                  <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+                    {attendanceList.length === 0 ? (
+                      <div style={{padding:'20px', textAlign:'center', color:'#999'}}>
+                        No student records found
+                      </div>
+                    ) : (
+                      <table className="table table-sm" style={{marginBottom:0}}>
+                        <thead>
+                          <tr>
+                            <th>Student Name</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            {attendanceEditing && <th>Action</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attendanceList.map(student => {
+                            const currentStatus = attendanceChanges[student._id]?.status || student.status || 'Absent';
+                            return (
+                              <tr key={student._id || student.studentId} style={{
+                                background: currentStatus?.toLowerCase() === 'present' ? '#ecfdf5' : '#fef2f2'
+                              }}>
+                                <td><strong>{student.studentName || student.student?.fullName || 'Unknown'}</strong></td>
+                                <td>{student.studentEmail || student.student?.email || 'N/A'}</td>
+                                <td>
+                                  {attendanceEditing ? (
+                                    <select 
+                                      value={currentStatus}
+                                      onChange={(e) => setAttendanceChanges(prev => ({
+                                        ...prev,
+                                        [student._id]: { status: e.target.value }
+                                      }))}
+                                      className="form-select form-select-sm"
+                                      style={{width:'100px'}}
+                                    >
+                                      <option value="Present">Present</option>
+                                      <option value="Absent">Absent</option>
+                                    </select>
+                                  ) : (
+                                    <span style={{
+                                      padding: '4px 8px',
+                                      borderRadius: '4px',
+                                      background: currentStatus?.toLowerCase() === 'present' ? '#d1fae5' : '#fee2e2',
+                                      color: currentStatus?.toLowerCase() === 'present' ? '#065f46' : '#991b1b',
+                                      fontWeight: '600'
+                                    }}>
+                                      {currentStatus}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -2593,10 +2826,29 @@ function Schedule() {
             } catch (e) {}
             if (!normalized.students) normalized.students = getStudentsText(normalized);
 
-            setClasses((prev) => [...prev, normalized]);
-            // Add locally so creator sees the event immediately; avoid duplicates
+            setClasses((prev) => {
+              if (!normalized._id) return [...prev, normalized];
+              // For edits: replace if exists by _id, otherwise add
+              const idx = (prev || []).findIndex(x => x._id && x._id === normalized._id);
+              if (idx >= 0) {
+                const updated = [...(prev || [])];
+                updated[idx] = normalized;
+                return updated;
+              }
+              return [...(prev || []), normalized];
+            });
+            // Add/update in upcomingClasses to reflect changes immediately
             setUpcomingClasses((prev) => {
               const list = prev || [];
+              // For edits by _id: replace, otherwise add if not duplicate
+              if (normalized._id) {
+                const idx = list.findIndex(x => x._id && x._id === normalized._id);
+                if (idx >= 0) {
+                  const updated = [...list];
+                  updated[idx] = normalized;
+                  return updated;
+                }
+              }
               // avoid duplicate by _id, otherwise by title+date+time
               const exists = normalized._id ? list.some(x => x._id && x._id === normalized._id) : list.some(x => x.title === normalized.title && x.date === normalized.date && x.time === normalized.time);
               if (exists) return list;

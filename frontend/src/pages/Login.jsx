@@ -123,8 +123,8 @@ function LoginPage() {
       <div
         className="login-left"
         style={{
-          backgroundImage:
-            "url('https://i.pinimg.com/736x/a3/cd/39/a3cd39079280f9c79410817b6236e47e.jpg')",
+          background:
+            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
