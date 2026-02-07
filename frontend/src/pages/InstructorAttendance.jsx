@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Download, Loader } from 'lucide-react';
-import AppLayout from '../../components/AppLayout';
-import './InstructorAttendance.css';
+import AppLayout from '../components/AppLayout';
+import '../assets/attendance.css';
 
 const InstructorAttendance = () => {
   const navigate = useNavigate();

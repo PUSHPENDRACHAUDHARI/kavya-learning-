@@ -380,12 +380,196 @@ const getStudentLiveSessionAttendance = asyncHandler(async (req, res) => {
 
   res.json({ attendance: records });
 });
+// Mark attendance manually by instructor for a completed class
+const markAttendanceByInstructor = asyncHandler(async (req, res) => {
+  const { eventId, attendanceList } = req.body;
+  const instructorId = req.user._id;
+  const role = req.user.role;
+
+  console.log('🎓 Marking attendance for event:', eventId);
+
+  // Check authorization - only instructor or admin
+  if (role !== 'instructor' && role !== 'admin' && role !== 'sub-admin') {
+    res.status(403);
+    throw new Error('Only instructors can mark attendance');
+  }
+
+  if (!eventId || !Array.isArray(attendanceList) || attendanceList.length === 0) {
+    res.status(400);
+    throw new Error('eventId and attendanceList are required');
+  }
+
+  // Fetch event details
+  const event = await Event.findById(eventId).populate('course');
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  // Verify instructor owns this event
+  if (role === 'instructor' && event.instructor && event.instructor.toString() !== instructorId.toString()) {
+    res.status(403);
+    throw new Error('Not authorized to mark attendance for this event');
+  }
+
+  const courseId = event.course?._id;
+  const subjectName = event.title;
+  const date = event.date;
+
+  // Process attendance records
+  const operations = [];
+  for (const record of attendanceList) {
+    const { studentId, studentName, studentEmail, status } = record;
+
+    operations.push({
+      updateOne: {
+        filter: { eventId, studentId },
+        update: {
+          $set: {
+            eventId,
+            courseId,
+            instructorId,
+            studentId,
+            date,
+            subjectName,
+            studentName,
+            studentEmail,
+            status: status || 'Absent',
+            markedBy: 'instructor'
+          }
+        },
+        upsert: true
+      }
+    });
+  }
+
+  if (operations.length) {
+    await Attendance.bulkWrite(operations);
+    console.log('✅ Marked attendance for', operations.length, 'students');
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `Attendance marked for ${operations.length} students`,
+    marked: operations.length
+  });
+});
+
+// Get attendance records for instructor (summary view)
+const getInstructorAttendanceRecords = asyncHandler(async (req, res) => {
+  const instructorId = req.user._id;
+  const role = req.user.role;
+
+  // Check authorization
+  if (role !== 'instructor' && role !== 'admin' && role !== 'sub-admin') {
+    res.status(403);
+    throw new Error('Not authorized');
+  }
+
+  let query = {};
+  if (role === 'instructor') {
+    query.instructorId = instructorId;
+  }
+
+  // Group by eventId/date/subjectName to get summary
+  const records = await Attendance.aggregate([
+    { $match: query },
+    {
+      $group: {
+        _id: {
+          eventId: '$eventId',
+          date: '$date',
+          subjectName: '$subjectName'
+        },
+        totalStudents: { $sum: 1 },
+        presentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] }
+        },
+        absentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] }
+        }
+      }
+    },
+    { $sort: { '_id.date': -1 } }
+  ]);
+
+  res.status(200).json({
+    success: true,
+    records: records.map(r => ({
+      eventId: r._id.eventId,
+      date: r._id.date,
+      subjectName: r._id.subjectName,
+      totalStudents: r.totalStudents,
+      presentCount: r.presentCount,
+      absentCount: r.absentCount
+    }))
+  });
+});
+
+// Get detailed attendance for a specific event
+const getAttendanceDetails = asyncHandler(async (req, res) => {
+  const { eventId } = req.params;
+  const instructorId = req.user._id;
+  const role = req.user.role;
+
+  console.log('📋 Fetching attendance details for event:', eventId);
+
+  if (!eventId) {
+    res.status(400);
+    throw new Error('eventId is required');
+  }
+
+  // Fetch event to verify authorization
+  const event = await Event.findById(eventId);
+  if (!event) {
+    res.status(404);
+    throw new Error('Event not found');
+  }
+
+  // Check authorization
+  if (role === 'instructor' && event.instructor && event.instructor.toString() !== instructorId.toString()) {
+    res.status(403);
+    throw new Error('Not authorized to view this attendance');
+  }
+
+  // Fetch all attendance records for this event
+  const attendance = await Attendance.find({ eventId })
+    .populate('studentId', 'fullName email')
+    .sort({ createdAt: 1 });
+
+  console.log('✅ Found', attendance.length, 'attendance records');
+
+  res.status(200).json({
+    success: true,
+    event: {
+      _id: event._id,
+      title: event.title,
+      date: event.date,
+      startTime: event.startTime,
+      endTime: event.endTime
+    },
+    attendance: attendance.map(a => ({
+      _id: a._id,
+      studentId: a.studentId?._id,
+      studentName: a.studentName || a.studentId?.fullName,
+      studentEmail: a.studentEmail || a.studentId?.email,
+      status: a.status,
+      markedBy: a.markedBy,
+      joinedAt: a.joinedAt,
+      leftAt: a.leftAt,
+      createdAt: a.createdAt
+    }))
+  });
+});
 
 module.exports = {
   joinAttendance,
   markAbsentForEvent,
   getAttendanceForEvent,
   getAttendanceForStudent,
+  markAttendanceByInstructor,
+  getInstructorAttendanceRecords,
+  getAttendanceDetails,
   recordAttendance: asyncHandler(async (req, res) => {
     const eventId = req.params.id;
     const userId = req.user && req.user._id;
