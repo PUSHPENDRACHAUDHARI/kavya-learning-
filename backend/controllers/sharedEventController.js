@@ -45,11 +45,22 @@ const getSharedEvents = asyncHandler(async (req, res) => {
   const { date } = req.query;
   let filter = {};
   if (date) {
-    const start = new Date(date);
-    start.setHours(0,0,0,0);
-    const end = new Date(date);
-    end.setHours(23,59,59,999);
-    filter.date = { $gte: start, $lte: end };
+    // Parse YYYY-MM-DD as local date to avoid UTC parsing shifting the day
+    const m = String(date).trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) {
+      const year = parseInt(m[1], 10);
+      const monthIndex = parseInt(m[2], 10) - 1;
+      const dayNum = parseInt(m[3], 10);
+      const start = new Date(year, monthIndex, dayNum, 0, 0, 0, 0);
+      const end = new Date(year, monthIndex, dayNum, 23, 59, 59, 999);
+      filter.date = { $gte: start, $lte: end };
+    } else {
+      const start = new Date(date);
+      start.setHours(0,0,0,0);
+      const end = new Date(date);
+      end.setHours(23,59,59,999);
+      filter.date = { $gte: start, $lte: end };
+    }
   }
 
   const events = await SharedEvent.find(filter)
