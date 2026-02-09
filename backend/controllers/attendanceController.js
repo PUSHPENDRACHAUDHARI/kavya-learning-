@@ -6,6 +6,16 @@ const Course = require('../models/courseModel');
 const User = require('../models/userModel');
 const Enrollment = require('../models/enrollmentModel');
 
+// Normalize attendance record fields coming from different deployments/schemas
+function normalizeAttendanceRecord(r) {
+  if (!r) return r;
+  const joinedAt = r.joinedAt || r.joined_at || r.joined || r.accessedAt || null;
+  const leftAt = r.leftAt || r.left_at || r.left || null;
+  const status = r.status || (r.present ? 'Present' : (r.absent ? 'Absent' : null));
+  const createdAt = r.createdAt || r.created_at || null;
+  return Object.assign({}, r, { joinedAt, leftAt, status, createdAt });
+}
+
 // POST /api/attendance/join
 // Body: { eventId }
 const joinAttendance = asyncHandler(async (req, res) => {
@@ -167,8 +177,9 @@ const getAttendanceForEvent = asyncHandler(async (req, res) => {
     }
   }
 
-  // Fetch any attendance records for this event
-  const records = await Attendance.find({ eventId }).lean();
+  // Fetch any attendance records for this event and normalize field names
+  const rawRecords = await Attendance.find({ eventId }).lean();
+  const records = Array.isArray(rawRecords) ? rawRecords.map(normalizeAttendanceRecord) : [];
 
   // Build a set of studentIds to fetch user details for (union of enrolled + recorded)
   const idsSet = new Set(enrolledIds);
@@ -182,7 +193,7 @@ const getAttendanceForEvent = asyncHandler(async (req, res) => {
   const userMap = new Map(users.map(u => [u._id.toString(), u]));
 
   // Map records by studentId for quick lookup
-  const recMap = new Map(records.map(r => [r.studentId ? r.studentId.toString() : '', r]));
+  const recMap = new Map(records.map(r => [r.studentId ? (r.studentId.toString ? r.studentId.toString() : String(r.studentId)) : '', r]));
 
   // Build students array preserving enrolled order when possible
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
@@ -247,13 +258,14 @@ const getAttendanceForEventDebug = asyncHandler(async (req, res) => {
     }
   }
 
-  const records = await Attendance.find({ eventId }).lean();
+  const rawRecords = await Attendance.find({ eventId }).lean();
+  const records = Array.isArray(rawRecords) ? rawRecords.map(normalizeAttendanceRecord) : [];
   const idsSet = new Set(enrolledIds);
   records.forEach(r => { try { if (r.studentId) idsSet.add(r.studentId.toString()); } catch (e) {} });
   const allIds = Array.from(idsSet);
   const users = allIds.length ? await User.find({ _id: { $in: allIds } }).select('fullName email').lean() : [];
   const userMap = new Map(users.map(u => [u._id.toString(), u]));
-  const recMap = new Map(records.map(r => [r.studentId ? r.studentId.toString() : '', r]));
+  const recMap = new Map(records.map(r => [r.studentId ? (r.studentId.toString ? r.studentId.toString() : String(r.studentId)) : '', r]));
 
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
     const user = userMap.get(sid) || {};
@@ -290,8 +302,8 @@ const getAttendanceForStudent = asyncHandler(async (req, res) => {
   const list = await Attendance.find({ studentId })
     .populate('eventId', 'title date startTime endTime')
     .lean();
-
-  res.json({ success: true, attendance: list });
+  const normalized = Array.isArray(list) ? list.map(normalizeAttendanceRecord) : [];
+  res.json({ success: true, attendance: normalized });
 });
 
 // Record attendance when a student joins a live session
@@ -596,8 +608,9 @@ const getAttendanceDetails = asyncHandler(async (req, res) => {
     }
   }
 
-  // Fetch any attendance records for this event
-  const records = await Attendance.find({ eventId }).lean();
+  // Fetch attendance records and normalize fields
+  const rawRecords = await Attendance.find({ eventId }).lean();
+  const records = Array.isArray(rawRecords) ? rawRecords.map(normalizeAttendanceRecord) : [];
 
   // Build a set of ids to load user details for (union of enrolled + recorded)
   const idsSet = new Set(enrolledIds);
@@ -607,7 +620,7 @@ const getAttendanceDetails = asyncHandler(async (req, res) => {
   const users = allIds.length ? await User.find({ _id: { $in: allIds } }).select('fullName email').lean() : [];
   const userMap = new Map(users.map(u => [u._id.toString(), u]));
 
-  const recMap = new Map(records.map(r => [r.studentId ? r.studentId.toString() : '', r]));
+  const recMap = new Map(records.map(r => [r.studentId ? (r.studentId.toString ? r.studentId.toString() : String(r.studentId)) : '', r]));
 
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
     const user = userMap.get(sid) || {};
@@ -735,15 +748,17 @@ module.exports = {
     }
     const students = await User.find({ _id: { $in: enrolled } }).select('fullName email');
 
-    const records = await Attendance.find({ eventId: event._id }).populate('studentId', 'fullName email');
-    const presentMap = new Map(records.map(r => [r.studentId._id.toString(), r]));
+    const rawRecords = await Attendance.find({ eventId: event._id }).populate('studentId', 'fullName email').lean();
+    const records = Array.isArray(rawRecords) ? rawRecords.map(normalizeAttendanceRecord) : [];
+    const presentMap = new Map(records.map(r => [r.studentId && r.studentId._id ? r.studentId._id.toString() : (r.studentId && r.studentId.toString ? r.studentId.toString() : String(r.studentId)), r]));
 
     const attendance = students.map(s => {
       const found = presentMap.get(s._id.toString());
       return {
         student: { _id: s._id, fullName: s.fullName, email: s.email },
         status: found ? 'Present' : 'Absent',
-        joinedAt: found ? found.joinedAt : null
+        joinedAt: found ? found.joinedAt : null,
+        leftAt: found ? found.leftAt : null
       };
     });
 

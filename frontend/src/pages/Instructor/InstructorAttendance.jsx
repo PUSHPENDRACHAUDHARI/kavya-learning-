@@ -127,95 +127,88 @@ function InstructorAttendance() {
     }
 
     try {
-      // Create PDF document in landscape mode for better table fit
-      const doc = new jsPDF('l', 'mm', 'a4');
+      // Create PDF document in portrait mode (A4) to match desired layout
+      const doc = new jsPDF('p', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      let yPosition = 15;
+      const marginLeft = 20;
+      let yPosition = 25;
 
-      // Add title
-      doc.setFontSize(18);
+      // Title (left-aligned, larger)
+      doc.setFontSize(22);
       doc.setFont(undefined, 'bold');
-      doc.text('Attendance Report', pageWidth / 2, yPosition, { align: 'center' });
+      doc.text('Attendance Report', marginLeft, yPosition);
       yPosition += 12;
 
-      // Add event details
+      // Event details block (left stacked)
       doc.setFontSize(11);
       doc.setFont(undefined, 'normal');
-      
       const eventTitle = attendanceEvent.title || attendanceEvent.name || 'Unknown';
       const eventDate = formatDate(attendanceEvent.date);
       const eventTime = formatTime(attendanceEvent);
-      
-      doc.text(`Event: ${eventTitle}`, 15, yPosition);
-      yPosition += 6;
-      // Instructor name (match UI display)
       const instructorName = getCreatorName(attendanceEvent);
-      doc.text(`Instructor: ${instructorName}`, 15, yPosition);
-      yPosition += 6;
-      doc.text(`Date: ${eventDate}`, 15, yPosition);
-      yPosition += 6;
-      doc.text(`Time: ${eventTime}`, 15, yPosition);
-      yPosition += 10;
 
-      // Calculate statistics
+      // Arrange details in a vertical list similar to Image 2
+      doc.text(`Session: ${eventTitle}`, marginLeft, yPosition);
+      yPosition += 7;
+      doc.text(`Date: ${eventDate}`, marginLeft, yPosition);
+      yPosition += 7;
+      doc.text(`Time: ${eventTime}`, marginLeft, yPosition);
+      yPosition += 7;
+      doc.text(`Instructor: ${instructorName}`, marginLeft, yPosition);
+      yPosition += 12;
+
+      // Statistics (separated)
       const presentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length;
       const absentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length;
       const totalCount = attendanceList.length;
 
-      // Add summary statistics
       doc.setFont(undefined, 'bold');
-      doc.setFontSize(10);
-      doc.text(`Present: ${presentCount} | Absent: ${absentCount} | Total Enrolled: ${totalCount}`, 15, yPosition);
-      yPosition += 8;
+      doc.setFontSize(12);
+      doc.text(`Present: ${presentCount}   Absent: ${absentCount}   Total: ${totalCount}`, marginLeft, yPosition);
+      yPosition += 10;
 
-      // Prepare table data
+      // Prepare table data and headers
       const tableHeaders = ['Student Name', 'Status', 'Joined At', 'Left At'];
       const tableData = attendanceList.map(a => {
         const studentName = a.studentName || a.name || a.email || a.studentId || 'Unknown';
-        const status = (a.status || 'Absent').toUpperCase();
+        const status = (a.status || 'Absent');
         const joinedAt = a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
         const leftAt = a.leftAt ? new Date(a.leftAt).toLocaleString() : '-';
         return [studentName, status, joinedAt, leftAt];
       });
 
-      // Add table using autoTable plugin if available, otherwise fall back to a simple manual table
+      // Use autoTable with striped/grid style and a blue header like Image 2
       if (typeof doc.autoTable === 'function') {
         try {
           doc.autoTable({
             startY: yPosition,
             head: [tableHeaders],
             body: tableData,
-            theme: 'grid',
+            theme: 'striped',
             headStyles: {
               fillColor: [41, 108, 176],
               textColor: [255, 255, 255],
               fontStyle: 'bold',
-              fontSize: 10
+              halign: 'left'
             },
-            bodyStyles: {
-              textColor: [0, 0, 0],
-              fontSize: 9
-            },
-            alternateRowStyles: {
-              fillColor: [240, 240, 240]
-            },
-            columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
-            margin: { left: 15, right: 15 },
+            bodyStyles: { fontSize: 10, textColor: [34, 34, 34] },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 }, 3: { cellWidth: 40 } },
+            margin: { left: marginLeft, right: marginLeft },
             didDrawPage: function(data) {
-              // Add footer with timestamp on each page
+              // Footer with timestamp and page number
               const pageSize = doc.internal.pageSize;
-              const pageHeight = pageSize.getHeight();
-              const pageWidth = pageSize.getWidth();
-              doc.setFontSize(8);
+              const pH = pageSize.getHeight();
+              const pW = pageSize.getWidth();
+              doc.setFontSize(9);
               doc.setFont(undefined, 'normal');
-              doc.text(`Generated on ${new Date().toLocaleString()}`, 15, pageHeight - 10);
-              doc.text(`Page ${data.pageCount}`, pageWidth - 30, pageHeight - 10);
+              doc.text(`Generated on ${new Date().toLocaleString()}`, marginLeft, pH - 10);
+              doc.text(`Page ${data.pageNumber}`, pW - marginLeft - 30, pH - 10);
             }
           });
         } catch (e) {
           console.warn('autoTable failed, falling back to manual table render', e);
-          // fall through to manual rendering below
           renderManualTable();
         }
       } else {
