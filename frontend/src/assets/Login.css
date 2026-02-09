@@ -91,6 +91,16 @@
     pointer-events: auto !important;
 }
 
+/* Admin-specific modifier */
+.login-btn.admin {
+    background-color: #6b7280 !important; /* gray-500 */
+    color: #fff !important;
+}
+
+.login-btn.admin:hover {
+    background-color: #4b5563 !important; /* gray-600 */
+}
+
 /* DIVIDER */
 .divider {
     margin: 20px 0;
