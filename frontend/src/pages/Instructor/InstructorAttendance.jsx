@@ -79,6 +79,34 @@ function InstructorAttendance() {
     return `${start} - ${end}`;
   };
 
+  const handleDeleteEvent = async (eventToDelete) => {
+    if (!eventToDelete || !eventToDelete._id) {
+      alert('Cannot delete: invalid event');
+      return;
+    }
+    // Confirm with user
+    // eslint-disable-next-line no-restricted-globals
+    if (!confirm('Delete this event? This action cannot be undone.')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/events/${eventToDelete._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: token ? `Bearer ${token}` : '' }
+      });
+      // If server returns 404 or success, remove locally to avoid UI stuck
+      if (!res.ok && res.status !== 404) {
+        const errText = await res.text().catch(() => 'Delete failed');
+        throw new Error(errText || 'Failed to delete event');
+      }
+      // Remove locally
+      setEvents(prev => prev.filter(e => e._id !== eventToDelete._id));
+    } catch (err) {
+      console.error('Failed to delete event', err);
+      alert('Failed to delete event. Check console for details.');
+    }
+  };
+
   const getCreatorName = (event) => {
     if (event.instructor) {
       if (typeof event.instructor === 'string') return event.instructor;
@@ -273,12 +301,20 @@ function InstructorAttendance() {
                       <td style={{ padding: 12 }}>{formatDate(event.date)}</td>
                       <td style={{ padding: 12 }}>{formatTime(event)}</td>
                       <td style={{ padding: 12, textAlign: 'center' }}>
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => handleViewAttendance(event)}
-                        >
-                          View Attendance
-                        </button>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleViewAttendance(event)}
+                          >
+                            View Attendance
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => handleDeleteEvent(event)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
