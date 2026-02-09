@@ -67,19 +67,28 @@
 
 /* LOGIN BUTTON */
 .login-btn {
-    width: 100%;
-    background-color: #5c2d91;
-    color: white;
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: 0.3s ease;
+    width: 100% !important;
+    background-color: #5c2d91 !important;
+    color: white !important;
+    padding: 12px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
-.login-btn:hover {
-    background-color: #4b1d7d;
+/* No hover effects */
+
+/* Keep login button visible when disabled (loading state) */
+.login-btn:disabled {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
 /* DIVIDER */
