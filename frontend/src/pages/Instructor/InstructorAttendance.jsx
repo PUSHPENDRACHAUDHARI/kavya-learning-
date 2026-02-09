@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Eye, Download, Loader } from 'lucide-react';
 import AppLayout from '../../components/AppLayout';
 import './InstructorAttendance.css';
 
@@ -12,32 +10,39 @@ function InstructorAttendance() {
   const [attendanceList, setAttendanceList] = useState([]);
   const [attendanceEvent, setAttendanceEvent] = useState(null);
 
-  // Fetch all events on mount
   useEffect(() => {
-    (async () => {
+    const fetchEvents = async () => {
       setLoading(true);
       try {
-        const res = await axiosClient.get('/api/events');
-        setEvents(Array.isArray(res.data) ? res.data : res.data?.data || []);
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/events', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
+        if (!res.ok) throw new Error('Failed to load events');
+        const body = await res.json();
+        // support both direct array or { data: [...] }
+        const items = Array.isArray(body) ? body : body?.data || body?.events || [];
+        setEvents(items);
       } catch (err) {
         console.error('Failed to load events', err);
         setEvents([]);
       } finally {
         setLoading(false);
       }
-    })();
+    };
+    fetchEvents();
   }, []);
 
-  // Handle View Attendance button click
   const handleViewAttendance = async (event) => {
+    setAttendanceLoading(true);
+    setAttendanceModalOpen(true);
+    setAttendanceEvent(event);
     try {
-      setAttendanceLoading(true);
-      setAttendanceModalOpen(true);
-      setAttendanceEvent(event);
-      const api = await import('../../api');
-      const res = await api.getAttendanceForEvent(event._id);
-      if (res && Array.isArray(res.students)) setAttendanceList(res.students);
-      else setAttendanceList([]);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/attendance/event/${event._id}/details`, {
+        headers: { Authorization: token ? `Bearer ${token}` : '' }
+      });
+      if (!res.ok) throw new Error('Failed to fetch attendance');
+      const data = await res.json();
+      setAttendanceList(Array.isArray(data.attendance) ? data.attendance : data.students || []);
     } catch (err) {
       console.warn('Failed to load attendance', err);
       setAttendanceList([]);
@@ -46,14 +51,12 @@ function InstructorAttendance() {
     }
   };
 
-  // Format event time
   const formatTime = (event) => {
     const start = event.startTime || 'TBD';
     const end = event.endTime || 'TBD';
     return `${start} - ${end}`;
   };
 
-  // Get event creator name
   const getCreatorName = (event) => {
     if (event.instructor) {
       if (typeof event.instructor === 'string') return event.instructor;
@@ -62,84 +65,15 @@ function InstructorAttendance() {
     return 'Unknown';
   };
 
-  // Format event date
   const formatDate = (dateStr) => {
     if (!dateStr) return 'TBD';
-    try {
-      return new Date(dateStr).toLocaleDateString();
-    } catch (e) {
-      return 'TBD';
-    }
+    try { return new Date(dateStr).toLocaleDateString(); } catch (e) { return 'TBD'; }
   };
 
-      const response = await fetch('/api/attendance/instructor/records', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch attendance records');
-      }
-
-      const data = await response.json();
-      console.log('📋 Fetched attendance records:', data);
-
-      if (data.success && data.records) {
-        setAttendanceRecords(data.records.sort((a, b) => 
-          new Date(b.date) - new Date(a.date)
-        ));
-      }
-      setError(null);
-    } catch (err) {
-      console.error('❌ Error fetching attendance records:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleViewAttendance = async (eventId, subjectName, date) => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-
-      const response = await fetch(`/api/attendance/event/${eventId}/details`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch attendance details');
-      }
-
-      const data = await response.json();
-      console.log('👥 Fetched attendance details:', data);
-
-      if (data.success) {
-        setSelectedEvent({
-          eventId,
-          title: subjectName,
-          date: new Date(date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })
-        });
-        setAttendanceDetails(data.attendance || []);
-        setShowDetailsModal(true);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching attendance details:', err);
-      alert('Failed to fetch attendance details: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDownloadCSV = () => {
-    if (!attendanceDetails.length) return;
+  return (
+    <AppLayout>
+      <div style={{ padding: 20 }}>
+        <h3>Instructor Attendance</h3>
 
         {loading && <div style={{ marginTop: 18 }}>Loading events...</div>}
 
@@ -181,12 +115,11 @@ function InstructorAttendance() {
           </div>
         )}
 
-        {/* Attendance Modal - Reused from Schedule */}
         {attendanceModalOpen && (
           <div className="attendance-modal-backdrop" style={{ position: 'fixed', left: 0, top: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1100 }} onClick={() => setAttendanceModalOpen(false)}>
             <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e) => e.stopPropagation()}>
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title : 'Attendance'}</h5>
+                <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title || attendanceEvent.name : 'Attendance'}</h5>
                 <div>
                   <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
                 </div>
@@ -233,6 +166,6 @@ function InstructorAttendance() {
       </div>
     </AppLayout>
   );
-};
+}
 
 export default InstructorAttendance;

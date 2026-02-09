@@ -130,23 +130,31 @@ textarea.input-field {
 
 /* REGISTER BUTTON */
 .register-btn {
-    width: 100%;
-    background-color: #ff9900;
-    color: white;
-    padding: 14px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 1.05rem;
-    margin-top: 15px;
-    transition: background-color 0.3s ease, transform 0.1s;
-    box-shadow: 0 4px 10px rgba(255, 153, 0, 0.3);
+    width: 100% !important;
+    background-color: #ff9900 !important;
+    color: white !important;
+    padding: 14px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+    font-size: 1.05rem !important;
+    margin-top: 15px !important;
+    box-shadow: 0 4px 10px rgba(255, 153, 0, 0.3) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
-.register-btn:hover {
-    background-color: #e68a00;
-    transform: translateY(-1px);
+/* No hover effects */
+
+/* Keep register button visible when disabled (loading state) */
+.register-btn:disabled {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
 /* OTP UI actions (verify + resend) */
@@ -166,28 +174,52 @@ textarea.input-field {
 }
 
 .verify-btn {
-    background-color: #5c2d91;
-    color: #fff;
-    padding: 10px 14px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
+    background-color: #5c2d91 !important;
+    color: #fff !important;
+    padding: 10px 14px !important;
+    border: none !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-weight: 600 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
-.verify-btn:hover { background-color: #47235f }
+/* No hover effects */
+
+/* Keep verify button visible when disabled */
+.verify-btn:disabled {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
+}
 
 .resend-btn {
-    background: transparent;
-    border: none;
-    color: #5c2d91;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 8px 10px;
-    border-radius: 8px;
+    background: transparent !important;
+    border: none !important;
+    color: #5c2d91 !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
 }
 
-.resend-btn:hover { background: #f0eef8 }
+/* No hover effects */
+
+/* Keep resend button visible when disabled */
+.resend-btn:disabled {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    pointer-events: auto !important;
+}
 
 /* LOGIN TEXT */
 .login-text {
