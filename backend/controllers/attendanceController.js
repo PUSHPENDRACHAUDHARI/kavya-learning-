@@ -9,7 +9,8 @@ const Enrollment = require('../models/enrollmentModel');
 // Normalize attendance record fields coming from different deployments/schemas
 function normalizeAttendanceRecord(r) {
   if (!r) return r;
-  const joinedAt = r.joinedAt || r.joined_at || r.joined || r.accessedAt || null;
+  // Do NOT use accessedAt or other fallbacks as joinedAt — joinedAt must come from explicit join fields
+  const joinedAt = r.joinedAt || r.joined_at || r.joined || null;
   const leftAt = r.leftAt || r.left_at || r.left || null;
   const status = r.status || (r.present ? 'Present' : (r.absent ? 'Absent' : null));
   const createdAt = r.createdAt || r.created_at || null;
@@ -199,14 +200,26 @@ const getAttendanceForEvent = asyncHandler(async (req, res) => {
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
     const user = userMap.get(sid) || {};
     const rec = recMap.get(sid) || null;
-    const status = rec && rec.status === 'present' ? 'present' : 'absent';
+    const hasRecord = !!rec && !!rec._id;
+    const hasJoined = !!(rec && rec.joinedAt);
+    let status;
+    if (hasRecord && hasJoined) {
+      status = 'present';
+    } else if (!hasRecord) {
+      status = 'absent';
+    } else {
+      // Record exists but no explicit joinedAt — respect explicit status if present, otherwise treat as present
+      const s = String(rec.status || '').toLowerCase();
+      status = s === 'absent' ? 'absent' : 'present';
+    }
+
     return {
       studentId: sid,
       name: user.fullName || user.name || user.email || sid,
       email: user.email || null,
       status,
-      joinedAt: rec && rec.joinedAt ? rec.joinedAt : null,
-      leftAt: rec && rec.leftAt ? rec.leftAt : null,
+      joinedAt: status === 'present' && rec && rec.joinedAt ? rec.joinedAt : null,
+      leftAt: status === 'present' && rec && rec.leftAt ? rec.leftAt : null,
     };
   });
 
@@ -270,14 +283,25 @@ const getAttendanceForEventDebug = asyncHandler(async (req, res) => {
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
     const user = userMap.get(sid) || {};
     const rec = recMap.get(sid) || null;
-    const status = rec && rec.status === 'present' ? 'present' : 'absent';
+    const hasRecord = !!rec && !!rec._id;
+    const hasJoined = !!(rec && rec.joinedAt);
+    let status;
+    if (hasRecord && hasJoined) {
+      status = 'present';
+    } else if (!hasRecord) {
+      status = 'absent';
+    } else {
+      const s = String(rec.status || '').toLowerCase();
+      status = s === 'absent' ? 'absent' : 'present';
+    }
+
     return {
       studentId: sid,
       name: user.fullName || user.name || user.email || sid,
       email: user.email || null,
       status,
-      joinedAt: rec && rec.joinedAt ? rec.joinedAt : null,
-      leftAt: rec && rec.leftAt ? rec.leftAt : null,
+      joinedAt: status === 'present' && rec && rec.joinedAt ? rec.joinedAt : null,
+      leftAt: status === 'present' && rec && rec.leftAt ? rec.leftAt : null,
     };
   });
 
@@ -625,15 +649,26 @@ const getAttendanceDetails = asyncHandler(async (req, res) => {
   const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
     const user = userMap.get(sid) || {};
     const rec = recMap.get(sid) || null;
-    const status = rec && String(rec.status || '').toLowerCase() === 'present' ? 'Present' : 'Absent';
+    const hasRecord = !!rec && !!rec._id;
+    const hasJoined = !!(rec && rec.joinedAt);
+    let status;
+    if (hasRecord && hasJoined) {
+      status = 'Present';
+    } else if (!hasRecord) {
+      status = 'Absent';
+    } else {
+      const s = String(rec.status || '').toLowerCase();
+      status = s === 'absent' ? 'Absent' : 'Present';
+    }
+
     return {
       studentId: sid,
       studentName: user.fullName || user.name || user.email || sid,
       studentEmail: user.email || null,
       status,
       markedBy: rec && rec.markedBy ? rec.markedBy : null,
-      joinedAt: rec && rec.joinedAt ? rec.joinedAt : null,
-      leftAt: rec && rec.leftAt ? rec.leftAt : null,
+      joinedAt: status === 'Present' && rec && rec.joinedAt ? rec.joinedAt : null,
+      leftAt: status === 'Present' && rec && rec.leftAt ? rec.leftAt : null,
       createdAt: rec && rec.createdAt ? rec.createdAt : null
     };
   });
@@ -754,11 +789,23 @@ module.exports = {
 
     const attendance = students.map(s => {
       const found = presentMap.get(s._id.toString());
+      const hasRecord = !!found;
+      const hasJoined = !!(found && found.joinedAt);
+      let status;
+      if (hasRecord && hasJoined) {
+        status = 'Present';
+      } else if (!hasRecord) {
+        status = 'Absent';
+      } else {
+        const st = String(found.status || '').toLowerCase();
+        status = st === 'absent' ? 'Absent' : 'Present';
+      }
+
       return {
         student: { _id: s._id, fullName: s.fullName, email: s.email },
-        status: found ? 'Present' : 'Absent',
-        joinedAt: found ? found.joinedAt : null,
-        leftAt: found ? found.leftAt : null
+        status,
+        joinedAt: status === 'Present' && found && found.joinedAt ? found.joinedAt : null,
+        leftAt: status === 'Present' && found && found.leftAt ? found.leftAt : null
       };
     });
 
