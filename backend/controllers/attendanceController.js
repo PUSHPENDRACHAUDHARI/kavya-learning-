@@ -4,6 +4,7 @@ const Event = require('../models/eventModel');
 const LiveSession = require('../models/liveSessionModel');
 const Course = require('../models/courseModel');
 const User = require('../models/userModel');
+const Enrollment = require('../models/enrollmentModel');
 
 // POST /api/attendance/join
 // Body: { eventId }
@@ -80,12 +81,27 @@ const markAbsentForEvent = asyncHandler(async (req, res) => {
   }
 
   // Build list of enrolled student ids from event.enrolledStudents or course.enrolledStudents
+  // Resolve enrolled students robustly: prefer event.enrolledStudents, then course.enrolledStudents,
+  // and finally fallback to Enrollment collection (some deployments store enrollments separately).
   let enrolledList = [];
-  if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) enrolledList = event.enrolledStudents.map(s => s.toString());
-  else if (event.course) {
+  if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+    enrolledList = event.enrolledStudents.map(s => s.toString());
+  } else if (event.course) {
     try {
       const course = await Course.findById(event.course).lean();
-      if (course && Array.isArray(course.enrolledStudents)) enrolledList = course.enrolledStudents.map(s => s.toString());
+      if (course && Array.isArray(course.enrolledStudents) && course.enrolledStudents.length) {
+        enrolledList = course.enrolledStudents.map(s => s.toString());
+      } else {
+        // Fallback: query Enrollment collection for course participants
+        try {
+          const fromEnroll = await Enrollment.find({ courseId: event.course }).select('studentId').lean();
+          if (Array.isArray(fromEnroll) && fromEnroll.length) {
+            enrolledList = fromEnroll.map(e => e.studentId && e.studentId.toString()).filter(Boolean);
+          }
+        } catch (e) {
+          enrolledList = [];
+        }
+      }
     } catch (e) { enrolledList = []; }
   }
 
@@ -126,14 +142,26 @@ const getAttendanceForEvent = asyncHandler(async (req, res) => {
     throw new Error('Event not found');
   }
 
-  // Gather enrolled IDs from event or course
+  // Resolve enrolled IDs robustly: event.enrolledStudents, then course.enrolledStudents,
+  // then Enrollment collection as a fallback (some deployments use Enrollment records)
   let enrolledIds = [];
   if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
     enrolledIds = event.enrolledStudents.map(s => s.toString());
   } else if (event.course) {
     try {
       const course = await Course.findById(event.course).lean();
-      if (course && Array.isArray(course.enrolledStudents)) enrolledIds = course.enrolledStudents.map(s => s.toString());
+      if (course && Array.isArray(course.enrolledStudents) && course.enrolledStudents.length) {
+        enrolledIds = course.enrolledStudents.map(s => s.toString());
+      } else {
+        try {
+          const fromEnroll = await Enrollment.find({ courseId: event.course }).select('studentId').lean();
+          if (Array.isArray(fromEnroll) && fromEnroll.length) {
+            enrolledIds = fromEnroll.map(e => e.studentId && e.studentId.toString()).filter(Boolean);
+          }
+        } catch (e) {
+          enrolledIds = [];
+        }
+      }
     } catch (e) {
       enrolledIds = [];
     }
@@ -202,7 +230,18 @@ const getAttendanceForEventDebug = asyncHandler(async (req, res) => {
   } else if (event.course) {
     try {
       const course = await Course.findById(event.course).lean();
-      if (course && Array.isArray(course.enrolledStudents)) enrolledIds = course.enrolledStudents.map(s => s.toString());
+      if (course && Array.isArray(course.enrolledStudents) && course.enrolledStudents.length) {
+        enrolledIds = course.enrolledStudents.map(s => s.toString());
+      } else {
+        try {
+          const fromEnroll = await Enrollment.find({ courseId: event.course }).select('studentId').lean();
+          if (Array.isArray(fromEnroll) && fromEnroll.length) {
+            enrolledIds = fromEnroll.map(e => e.studentId && e.studentId.toString()).filter(Boolean);
+          }
+        } catch (e) {
+          enrolledIds = [];
+        }
+      }
     } catch (e) {
       enrolledIds = [];
     }
@@ -644,8 +683,19 @@ module.exports = {
       return res.json({ course: { _id: course._id, title: course.title }, instructor: course.instructor, event: null, attendance: [] });
     }
 
-    // Build attendance list: include all enrolled students for the course
-    const enrolled = course.enrolledStudents || [];
+    // Build attendance list: include all enrolled students for the course.
+    // If `course.enrolledStudents` is empty, fall back to Enrollment records.
+    let enrolled = Array.isArray(course.enrolledStudents) ? course.enrolledStudents : [];
+    if ((!enrolled || enrolled.length === 0)) {
+      try {
+        const fromEnroll = await Enrollment.find({ courseId: courseId }).select('studentId').lean();
+        if (Array.isArray(fromEnroll) && fromEnroll.length) {
+          enrolled = fromEnroll.map(e => e.studentId).filter(Boolean);
+        }
+      } catch (e) {
+        enrolled = [];
+      }
+    }
     const students = await User.find({ _id: { $in: enrolled } }).select('fullName email');
 
     const records = await Attendance.find({ eventId: event._id }).populate('studentId', 'fullName email');
