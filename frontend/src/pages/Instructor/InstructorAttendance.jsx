@@ -70,6 +70,51 @@ function InstructorAttendance() {
     try { return new Date(dateStr).toLocaleDateString(); } catch (e) { return 'TBD'; }
   };
 
+  const handleDownloadAttendance = () => {
+    if (!attendanceEvent || attendanceList.length === 0) {
+      alert('No attendance data to download');
+      return;
+    }
+
+    // Create CSV content
+    const headers = ['Student', 'Status', 'Joined At', 'Left At'];
+    const rows = attendanceList.map(a => [
+      a.name || a.email || a.studentId || 'Unknown',
+      (a.status || 'absent').toUpperCase(),
+      a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-',
+      a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'
+    ]);
+
+    // Build CSV string
+    const csvContent = [
+      ['Attendance Report'],
+      ['Event:', attendanceEvent.title || attendanceEvent.name || 'Unknown'],
+      ['Date:', formatDate(attendanceEvent.date)],
+      ['Time:', formatTime(attendanceEvent)],
+      ['Present:', attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length],
+      ['Absent:', attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length],
+      ['Total Enrolled:', attendanceList.length],
+      [],
+      headers,
+      ...rows
+    ]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    const filename = `${attendanceEvent.title || 'attendance'}_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <AppLayout>
       <div style={{ padding: 20 }}>
@@ -120,7 +165,8 @@ function InstructorAttendance() {
             <div className="attendance-modal" style={{ width: '720px', maxHeight: '80vh', overflowY: 'auto', margin: '60px auto', background: '#fff', padding: 20, borderRadius: 8 }} onClick={(e) => e.stopPropagation()}>
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title || attendanceEvent.name : 'Attendance'}</h5>
-                <div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-sm btn-success" onClick={handleDownloadAttendance} disabled={attendanceLoading}>Download</button>
                   <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
                 </div>
               </div>

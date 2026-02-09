@@ -85,14 +85,56 @@
 }
 
 .btn-primary {
-  background: #2b6cb0;
-  color: #fff;
+  background: #2b6cb0 !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+  padding: 10px 20px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
 }
 
 .btn-primary:hover {
-  background: #1e4f7f;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(43, 108, 176, 0.3);
+  background: #2b6cb0 !important;
+  color: #fff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Keep Create Course button visible in form - aggressive override */
+form .btn-primary {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+  height: auto !important;
+  min-height: 40px !important;
+  width: 100% !important;
+}
+
+form .btn-primary:disabled {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+  background: #2b6cb0 !important;
+  color: #fff !important;
+}
+
+button[type="submit"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+}
+
+button[type="submit"]:disabled {
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 /* ===============================
