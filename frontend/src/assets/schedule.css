@@ -148,6 +148,17 @@ body {
   margin-top: 12px;
   border-top: 1px solid rgba(0,0,0,0.06);
   z-index: 2;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: flex !important;
+}
+
+/* Ensure all buttons in action row are visible */
+.modal-panel > form .d-flex.justify-content-end button {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 /* Ensure sticky footer looks correct on dark theme */
@@ -361,12 +372,35 @@ body {
   color: white;
 }
 .btn-modal {
-  background-color: #2b6cb0;
-  color: white;
+  background-color: #2b6cb0 !important;
+  color: white !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+  padding: 0.375rem 0.75rem !important;
+  border: none !important;
+  border-radius: 0.25rem !important;
+  cursor: pointer !important;
+  font-weight: 500 !important;
 }
+
+/* No hover effects */
 .btn-modal:hover {
-  background-color: #1a365d;
-  color: white;
+  background-color: #2b6cb0 !important;
+  color: white !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Keep button visible when disabled (loading state) */
+.btn-modal:disabled {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  pointer-events: auto !important;
+  background-color: #2b6cb0 !important;
+  color: white !important;
 }
 
 @media (max-width: 480px) {
