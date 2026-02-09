@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import AppLayout from '../../components/AppLayout';
 import './InstructorAttendance.css';
 
@@ -15,7 +17,7 @@ function InstructorAttendance() {
       setLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('/api/events', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
+        const res = await fetch('/api/events/my-events', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
         if (!res.ok) throw new Error('Failed to load events');
         const body = await res.json();
         // support both direct array or { data: [...] }
@@ -76,43 +78,95 @@ function InstructorAttendance() {
       return;
     }
 
-    // Create CSV content
-    const headers = ['Student', 'Status', 'Joined At', 'Left At'];
-    const rows = attendanceList.map(a => [
-      a.name || a.email || a.studentId || 'Unknown',
-      (a.status || 'absent').toUpperCase(),
-      a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-',
-      a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'
-    ]);
+    try {
+      // Create PDF document in landscape mode for better table fit
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let yPosition = 15;
 
-    // Build CSV string
-    const csvContent = [
-      ['Attendance Report'],
-      ['Event:', attendanceEvent.title || attendanceEvent.name || 'Unknown'],
-      ['Date:', formatDate(attendanceEvent.date)],
-      ['Time:', formatTime(attendanceEvent)],
-      ['Present:', attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length],
-      ['Absent:', attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length],
-      ['Total Enrolled:', attendanceList.length],
-      [],
-      headers,
-      ...rows
-    ]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
-      .join('\n');
+      // Add title
+      doc.setFontSize(18);
+      doc.setFont(undefined, 'bold');
+      doc.text('Attendance Report', pageWidth / 2, yPosition, { align: 'center' });
+      yPosition += 12;
 
-    // Create blob and download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    const filename = `${attendanceEvent.title || 'attendance'}_${new Date().toISOString().split('T')[0]}.csv`;
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      // Add event details
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'normal');
+      
+      const eventTitle = attendanceEvent.title || attendanceEvent.name || 'Unknown';
+      const eventDate = formatDate(attendanceEvent.date);
+      const eventTime = formatTime(attendanceEvent);
+      
+      doc.text(`Event: ${eventTitle}`, 15, yPosition);
+      yPosition += 6;
+      doc.text(`Date: ${eventDate}`, 15, yPosition);
+      yPosition += 6;
+      doc.text(`Time: ${eventTime}`, 15, yPosition);
+      yPosition += 10;
+
+      // Calculate statistics
+      const presentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'present').length;
+      const absentCount = attendanceList.filter(a => (a.status || '').toLowerCase() === 'absent').length;
+      const totalCount = attendanceList.length;
+
+      // Add summary statistics
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(10);
+      doc.text(`Present: ${presentCount} | Absent: ${absentCount} | Total Enrolled: ${totalCount}`, 15, yPosition);
+      yPosition += 8;
+
+      // Prepare table data
+      const tableHeaders = ['Student Name', 'Status', 'Joined At', 'Left At'];
+      const tableData = attendanceList.map(a => {
+        const studentName = a.studentName || a.name || a.email || a.studentId || 'Unknown';
+        const status = (a.status || 'Absent').toUpperCase();
+        const joinedAt = a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
+        const leftAt = a.leftAt ? new Date(a.leftAt).toLocaleString() : '-';
+        return [studentName, status, joinedAt, leftAt];
+      });
+
+      // Add table using autoTable plugin
+      doc.autoTable({
+        startY: yPosition,
+        head: [tableHeaders],
+        body: tableData,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [41, 108, 176],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10
+        },
+        bodyStyles: {
+          textColor: [0, 0, 0],
+          fontSize: 9
+        },
+        alternateRowStyles: {
+          fillColor: [240, 240, 240]
+        },
+        columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
+        margin: { left: 15, right: 15 },
+        didDrawPage: function(data) {
+          // Add footer with timestamp on each page
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.getHeight();
+          const pageWidth = pageSize.getWidth();
+          doc.setFontSize(8);
+          doc.setFont(undefined, 'normal');
+          doc.text(`Generated on ${new Date().toLocaleString()}`, 15, pageHeight - 10);
+          doc.text(`Page ${data.pageCount}`, pageWidth - 30, pageHeight - 10);
+        }
+      });
+
+      // Generate filename and download
+      const filename = `${eventTitle.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('Failed to generate PDF. Please try again.');
+    }
   };
 
   return (
@@ -129,6 +183,7 @@ function InstructorAttendance() {
                 <thead>
                   <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                     <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Name</th>
+                    <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Session</th>
                     <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Date</th>
                     <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Time</th>
                     <th style={{ padding: 12, textAlign: 'center', fontWeight: 600 }}>Attendance</th>
@@ -136,8 +191,9 @@ function InstructorAttendance() {
                 </thead>
                 <tbody>
                   {events.map(event => (
-                    <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                      <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: 12 }}>{getCreatorName(event)}</td>
+                      <td style={{ padding: 12 }}>{event.title || event.name || '-'}</td>
                       <td style={{ padding: 12 }}>{formatDate(event.date)}</td>
                       <td style={{ padding: 12 }}>{formatTime(event)}</td>
                       <td style={{ padding: 12, textAlign: 'center' }}>
@@ -183,6 +239,7 @@ function InstructorAttendance() {
                     <thead>
                       <tr>
                         <th>Student</th>
+                        <th>Session</th>
                         <th>Status</th>
                         <th>Joined At</th>
                         <th>Left At</th>
@@ -190,8 +247,9 @@ function InstructorAttendance() {
                     </thead>
                     <tbody>
                       {attendanceList.map(a => (
-                        <tr key={a.studentId || a.email || Math.random()}>
-                          <td>{a.name || a.email || a.studentId}</td>
+                        <tr key={a._id || a.studentId || a.email || Math.random()}>
+                          <td>{a.studentName || a.name || a.studentEmail || a.email || a.studentId || 'Unknown'}</td>
+                          <td>{attendanceEvent ? attendanceEvent.title || attendanceEvent.name : '-'}</td>
                           <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
                           <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
                           <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
@@ -199,7 +257,7 @@ function InstructorAttendance() {
                       ))}
                       {attendanceList.length === 0 && (
                         <tr>
-                          <td colSpan={4}>No attendance records yet</td>
+                          <td colSpan={5}>No attendance records yet</td>
                         </tr>
                       )}
                     </tbody>
