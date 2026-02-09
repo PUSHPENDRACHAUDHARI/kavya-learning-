@@ -44,7 +44,27 @@ function InstructorAttendance() {
       });
       if (!res.ok) throw new Error('Failed to fetch attendance');
       const data = await res.json();
-      setAttendanceList(Array.isArray(data.attendance) ? data.attendance : data.students || []);
+      const rawList = Array.isArray(data.attendance) ? data.attendance : data.students || [];
+
+      // Normalize attendance items to ensure joinedAt/leftAt and names are available
+      const normalized = rawList.map(item => {
+        // support nested student objects and different key names
+        const studentName = item.studentName || item.student?.fullName || item.student?.name || item.studentId?.fullName || item.name || item.studentEmail || item.email || '';
+        const studentEmail = item.studentEmail || item.student?.email || item.email || '';
+        const status = item.status || item.attendanceStatus || (item.present ? 'Present' : (item.absent ? 'Absent' : 'Absent'));
+        const joinedAt = item.joinedAt || item.joined_at || item.joinedAtISO || item.joinedAtTime || item.accessedAt || item.joined || item.createdAt || null;
+        const leftAt = item.leftAt || item.left_at || item.leftAtISO || item.leftAtTime || item.left || null;
+        return {
+          ...item,
+          studentName,
+          studentEmail,
+          status,
+          joinedAt,
+          leftAt
+        };
+      });
+
+      setAttendanceList(normalized);
     } catch (err) {
       console.warn('Failed to load attendance', err);
       setAttendanceList([]);
