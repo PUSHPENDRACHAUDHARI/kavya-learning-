@@ -571,12 +571,59 @@ const getAttendanceDetails = asyncHandler(async (req, res) => {
     throw new Error('Not authorized to view this attendance');
   }
 
-  // Fetch all attendance records for this event
-  const attendance = await Attendance.find({ eventId })
-    .populate('studentId', 'fullName email')
-    .sort({ createdAt: 1 });
+  // Build enrolled roster: prefer event.enrolledStudents, then course.enrolledStudents,
+  // then fallback to Enrollment collection if needed (some deployments store enrollments there)
+  let enrolledIds = [];
+  if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+    enrolledIds = event.enrolledStudents.map(s => s.toString());
+  } else if (event.course) {
+    try {
+      const course = await Course.findById(event.course).lean();
+      if (course && Array.isArray(course.enrolledStudents) && course.enrolledStudents.length) {
+        enrolledIds = course.enrolledStudents.map(s => s.toString());
+      } else {
+        try {
+          const fromEnroll = await Enrollment.find({ courseId: event.course }).select('studentId').lean();
+          if (Array.isArray(fromEnroll) && fromEnroll.length) {
+            enrolledIds = fromEnroll.map(e => e.studentId && e.studentId.toString()).filter(Boolean);
+          }
+        } catch (e) {
+          enrolledIds = [];
+        }
+      }
+    } catch (e) {
+      enrolledIds = [];
+    }
+  }
 
-  console.log('✅ Found', attendance.length, 'attendance records');
+  // Fetch any attendance records for this event
+  const records = await Attendance.find({ eventId }).lean();
+
+  // Build a set of ids to load user details for (union of enrolled + recorded)
+  const idsSet = new Set(enrolledIds);
+  records.forEach(r => { try { if (r.studentId) idsSet.add(r.studentId.toString()); } catch (e) {} });
+  const allIds = Array.from(idsSet);
+
+  const users = allIds.length ? await User.find({ _id: { $in: allIds } }).select('fullName email').lean() : [];
+  const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+  const recMap = new Map(records.map(r => [r.studentId ? r.studentId.toString() : '', r]));
+
+  const students = (enrolledIds.length ? enrolledIds : allIds).map(sid => {
+    const user = userMap.get(sid) || {};
+    const rec = recMap.get(sid) || null;
+    const status = rec && String(rec.status || '').toLowerCase() === 'present' ? 'Present' : 'Absent';
+    return {
+      studentId: sid,
+      studentName: user.fullName || user.name || user.email || sid,
+      studentEmail: user.email || null,
+      status,
+      markedBy: rec && rec.markedBy ? rec.markedBy : null,
+      joinedAt: rec && rec.joinedAt ? rec.joinedAt : null,
+      leftAt: rec && rec.leftAt ? rec.leftAt : null,
+      createdAt: rec && rec.createdAt ? rec.createdAt : null
+    };
+  });
 
   res.status(200).json({
     success: true,
@@ -587,17 +634,7 @@ const getAttendanceDetails = asyncHandler(async (req, res) => {
       startTime: event.startTime,
       endTime: event.endTime
     },
-    attendance: attendance.map(a => ({
-      _id: a._id,
-      studentId: a.studentId?._id,
-      studentName: a.studentName || a.studentId?.fullName,
-      studentEmail: a.studentEmail || a.studentId?.email,
-      status: a.status,
-      markedBy: a.markedBy,
-      joinedAt: a.joinedAt,
-      leftAt: a.leftAt,
-      createdAt: a.createdAt
-    }))
+    attendance: students
   });
 });
 
