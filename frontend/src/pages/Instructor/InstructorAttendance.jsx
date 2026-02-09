@@ -80,7 +80,7 @@ function InstructorAttendance() {
 
     try {
       // Create PDF document in landscape mode for better table fit
-      const doc = new jsPDF('p', 'mm', 'a4');
+      const doc = new jsPDF('l', 'mm', 'a4');
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       let yPosition = 15;
@@ -100,6 +100,10 @@ function InstructorAttendance() {
       const eventTime = formatTime(attendanceEvent);
       
       doc.text(`Event: ${eventTitle}`, 15, yPosition);
+      yPosition += 6;
+      // Instructor name (match UI display)
+      const instructorName = getCreatorName(attendanceEvent);
+      doc.text(`Instructor: ${instructorName}`, 15, yPosition);
       yPosition += 6;
       doc.text(`Date: ${eventDate}`, 15, yPosition);
       yPosition += 6;
@@ -127,41 +131,93 @@ function InstructorAttendance() {
         return [studentName, status, joinedAt, leftAt];
       });
 
-      // Add table using autoTable plugin
-      doc.autoTable({
-        startY: yPosition,
-        head: [tableHeaders],
-        body: tableData,
-        theme: 'grid',
-        headStyles: {
-          fillColor: [41, 108, 176],
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 10
-        },
-        bodyStyles: {
-          textColor: [0, 0, 0],
-          fontSize: 9
-        },
-        alternateRowStyles: {
-          fillColor: [240, 240, 240]
-        },
-        columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
-        margin: { left: 15, right: 15 },
-        didDrawPage: function(data) {
-          // Add footer with timestamp on each page
-          const pageSize = doc.internal.pageSize;
-          const pageHeight = pageSize.getHeight();
-          const pageWidth = pageSize.getWidth();
+      // Add table using autoTable plugin if available, otherwise fall back to a simple manual table
+      if (typeof doc.autoTable === 'function') {
+        try {
+          doc.autoTable({
+            startY: yPosition,
+            head: [tableHeaders],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+              fillColor: [41, 108, 176],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              fontSize: 10
+            },
+            bodyStyles: {
+              textColor: [0, 0, 0],
+              fontSize: 9
+            },
+            alternateRowStyles: {
+              fillColor: [240, 240, 240]
+            },
+            columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
+            margin: { left: 15, right: 15 },
+            didDrawPage: function(data) {
+              // Add footer with timestamp on each page
+              const pageSize = doc.internal.pageSize;
+              const pageHeight = pageSize.getHeight();
+              const pageWidth = pageSize.getWidth();
+              doc.setFontSize(8);
+              doc.setFont(undefined, 'normal');
+              doc.text(`Generated on ${new Date().toLocaleString()}`, 15, pageHeight - 10);
+              doc.text(`Page ${data.pageCount}`, pageWidth - 30, pageHeight - 10);
+            }
+          });
+        } catch (e) {
+          console.warn('autoTable failed, falling back to manual table render', e);
+          // fall through to manual rendering below
+          renderManualTable();
+        }
+      } else {
+        renderManualTable();
+      }
+
+      // Manual table renderer (fallback when autoTable not available)
+      function renderManualTable() {
+        const marginLeft = 15;
+        const marginRight = 15;
+        const usableWidth = pageWidth - marginLeft - marginRight;
+        const lineHeight = 6;
+        let cursorY = yPosition;
+
+        // Header
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text(tableHeaders.join(' | '), marginLeft, cursorY);
+        cursorY += lineHeight;
+
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+
+        for (let i = 0; i < tableData.length; i++) {
+          const row = tableData[i];
+          const rowText = row.join(' | ');
+          // add page if needed
+          if (cursorY > pageHeight - 20) {
+            doc.addPage();
+            cursorY = 20;
+          }
+          doc.text(rowText, marginLeft, cursorY);
+          cursorY += lineHeight;
+        }
+
+        // Add footer to all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let p = 1; p <= pageCount; p++) {
+          doc.setPage(p);
           doc.setFontSize(8);
           doc.setFont(undefined, 'normal');
           doc.text(`Generated on ${new Date().toLocaleString()}`, 15, pageHeight - 10);
-          doc.text(`Page ${data.pageCount}`, pageWidth - 30, pageHeight - 10);
+          doc.text(`Page ${p} of ${pageCount}`, pageWidth - 40, pageHeight - 10);
         }
-      });
+      }
 
-      // Generate filename and download
-      const filename = `${eventTitle.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      // Generate filename and download: attendance_<sessionName>_<date>.pdf
+      const sessionIsoDate = attendanceEvent && attendanceEvent.date ? new Date(attendanceEvent.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const safeTitle = eventTitle.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const filename = `attendance_${safeTitle}_${sessionIsoDate}.pdf`;
       doc.save(filename);
     } catch (err) {
       console.error('Error generating PDF:', err);
@@ -222,7 +278,7 @@ function InstructorAttendance() {
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h5 style={{ margin: 0 }}>{attendanceEvent ? attendanceEvent.title || attendanceEvent.name : 'Attendance'}</h5>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-sm btn-success" onClick={handleDownloadAttendance} disabled={attendanceLoading}>Download</button>
+                  <button className="btn btn-sm btn-success" onClick={handleDownloadAttendance} disabled={attendanceLoading}>Download PDF</button>
                   <button className="btn btn-sm btn-light" onClick={() => setAttendanceModalOpen(false)}>Close</button>
                 </div>
               </div>
