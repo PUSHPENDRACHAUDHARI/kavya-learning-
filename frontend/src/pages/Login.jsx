@@ -295,7 +295,7 @@ function LoginPage() {
             <span>or</span>
           </div>
           <div style={{display:'flex', gap:8, justifyContent:'center', marginTop:8}}>
-            <button className="login-btn" style={{background:'#6b7280'}} onClick={() => setShowAdminLogin(true)}>Login as Admin</button>
+            <button className="login-btn admin" onClick={() => setShowAdminLogin(true)}>Login as Admin</button>
           </div>
 
           <p className="signup-text">
