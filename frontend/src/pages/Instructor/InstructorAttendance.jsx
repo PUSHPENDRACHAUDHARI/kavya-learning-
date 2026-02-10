@@ -168,14 +168,14 @@ function InstructorAttendance() {
       doc.text(`Present: ${presentCount}   Absent: ${absentCount}   Total: ${totalCount}`, marginLeft, yPosition);
       yPosition += 10;
 
-      // Prepare table data and headers
-      const tableHeaders = ['Student Name', 'Status', 'Joined At', 'Left At'];
+      // Prepare table data and headers (Left At removed)
+      const tableHeaders = ['Student Name', 'Status', 'Joined At'];
       const tableData = attendanceList.map(a => {
         const studentName = a.studentName || a.name || a.email || a.studentId || 'Unknown';
         const status = (a.status || 'Absent');
-        const joinedAt = a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
-        const leftAt = a.leftAt ? new Date(a.leftAt).toLocaleString() : '-';
-        return [studentName, status, joinedAt, leftAt];
+        const isPresent = (String(status || '').toLowerCase() === 'present');
+        const joinedAt = isPresent && a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
+        return [studentName, status, joinedAt];
       });
 
       // Use autoTable with striped/grid style and a blue header like Image 2
@@ -194,7 +194,7 @@ function InstructorAttendance() {
             },
             bodyStyles: { fontSize: 10, textColor: [34, 34, 34] },
             alternateRowStyles: { fillColor: [245, 245, 245] },
-            columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 }, 3: { cellWidth: 40 } },
+            columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 40 }, 2: { cellWidth: 50 } },
             margin: { left: marginLeft, right: marginLeft },
             didDrawPage: function(data) {
               // Footer with timestamp and page number
@@ -347,19 +347,23 @@ function InstructorAttendance() {
                         <th>Session</th>
                         <th>Status</th>
                         <th>Joined At</th>
-                        <th>Left At</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {attendanceList.map(a => (
+                      {attendanceList.map(a => {
+                        const status = a.status || 'absent';
+                        const isPresent = String(status).toLowerCase() === 'present';
+                        const displayJoined = isPresent && a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
+                        const displayLeft = isPresent && a.leftAt ? new Date(a.leftAt).toLocaleString() : '-';
+                        return (
                         <tr key={a._id || a.studentId || a.email || Math.random()}>
                           <td>{a.studentName || a.name || a.studentEmail || a.email || a.studentId || 'Unknown'}</td>
                           <td>{attendanceEvent ? attendanceEvent.title || attendanceEvent.name : '-'}</td>
-                          <td style={{ textTransform: 'capitalize' }}>{a.status || 'absent'}</td>
-                          <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
-                          <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
+                          <td style={{ textTransform: 'capitalize' }}>{status}</td>
+                          <td>{displayJoined}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       {attendanceList.length === 0 && (
                         <tr>
                           <td colSpan={5}>No attendance records yet</td>

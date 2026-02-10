@@ -53,6 +53,10 @@ router.post('/access', protect, authorize('student', 'parent'), (req, res, next)
 router.post('/:eventId/leave', protect, authorize('student', 'parent'), (req, res, next) => {
   return (async () => { try { await require('../controllers/attendanceController').leaveEvent(req, res); } catch (e) { next(e); } })();
 });
+// Beacon-friendly leave route: accepts token via query/body for navigator.sendBeacon reliability
+router.post('/:eventId/leave-beacon', (req, res, next) => {
+  return (async () => { try { await require('../controllers/attendanceController').leaveEventBeacon(req, res); } catch (e) { next(e); } })();
+});
 
 // Live session attendance routes
 router.post('/live-sessions/:sessionId/join', protect, recordLiveSessionAttendance);

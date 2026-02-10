@@ -297,6 +297,28 @@ export async function leaveAttendance(eventId) {
   return res.json();
 }
 
+export async function leaveAttendanceBeacon(eventId) {
+  try {
+    const token = localStorage.getItem('token');
+    const url = `${BASE}/attendance/${eventId}/leave-beacon${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+    // sendBeacon returns boolean; we don't wait for response
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const blob = new Blob([JSON.stringify({ timestamp: new Date().toISOString() })], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+      return { success: true, beacon: true };
+    }
+  } catch (e) {
+    // fall through to fetch
+  }
+  // Fallback to fetch when beacon unavailable
+  try {
+    const res = await fetch(`${BASE}/attendance/${eventId}/leave-beacon`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: localStorage.getItem('token') }) });
+    return res.json();
+  } catch (e) {
+    return { success: false };
+  }
+}
+
 // Lightweight helper to get a list of instructors. The backend may not expose
 // a public instructors list; return empty array when unavailable.
 export async function getInstructors() {
@@ -365,4 +387,6 @@ export default {
   ,joinAttendance
   ,getAttendanceForEvent
   ,getAttendanceForStudent
+   ,leaveAttendance
+   ,leaveAttendanceBeacon
 };

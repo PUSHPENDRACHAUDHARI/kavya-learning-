@@ -5,6 +5,7 @@ const LiveSession = require('../models/liveSessionModel');
 const Course = require('../models/courseModel');
 const User = require('../models/userModel');
 const Enrollment = require('../models/enrollmentModel');
+const jwt = require('jsonwebtoken');
 
 // Normalize attendance record fields coming from different deployments/schemas
 function normalizeAttendanceRecord(r) {
@@ -352,7 +353,7 @@ const recordLiveSessionAttendance = asyncHandler(async (req, res) => {
     liveSession: sessionId, 
     student: userId 
   });
-  
+
   if (!att) {
     att = await Attendance.create({ 
       liveSession: sessionId,
@@ -360,12 +361,17 @@ const recordLiveSessionAttendance = asyncHandler(async (req, res) => {
       student: userId,
       instructor: session.instructor,
       joinedAt: new Date(),
+      leftAt: null,
+      status: 'present',
       attendanceType: 'live_class',
       cameraEnabled: cameraEnabled || false,
       micEnabled: micEnabled || false
     });
   } else {
-    att.joinedAt = new Date();
+    // Do NOT overwrite existing joinedAt. Only set it when missing.
+    if (!att.joinedAt) att.joinedAt = new Date();
+    // Mark present but do not touch leftAt here
+    att.status = 'present';
     att.cameraEnabled = cameraEnabled || att.cameraEnabled;
     att.micEnabled = micEnabled || att.micEnabled;
     await att.save();
@@ -386,14 +392,24 @@ const updateLiveSessionAttendance = asyncHandler(async (req, res) => {
   });
   
   if (att) {
-    att.leftAt = new Date();
-    if (att.joinedAt) {
-      att.duration = Math.round((att.leftAt - att.joinedAt) / (1000 * 60)); // Duration in minutes
+    // Update leftAt only when student was present and leftAt not already set
+    const currentStatus = String(att.status || '').toLowerCase();
+    if ((currentStatus === 'present' || !!att.joinedAt) && !att.leftAt) {
+      const now = new Date();
+      // Ensure leftAt is strictly after joinedAt to avoid identical timestamps
+      if (att.joinedAt && now <= new Date(att.joinedAt)) {
+        att.leftAt = new Date(new Date(att.joinedAt).getTime() + 1000);
+      } else {
+        att.leftAt = now;
+      }
+      if (att.joinedAt) {
+        att.duration = Math.round((att.leftAt - att.joinedAt) / (1000 * 60)); // Duration in minutes
+      }
+      if (participationScore !== undefined) {
+        att.participationScore = participationScore;
+      }
+      await att.save();
     }
-    if (participationScore !== undefined) {
-      att.participationScore = participationScore;
-    }
-    await att.save();
   }
 
   res.json({ success: true });
@@ -845,13 +861,65 @@ module.exports = {
       return res.json({ success: true, leftAt: null, message: 'No attendance record to update' });
     }
 
-    att.leftAt = now;
-    // Keep status as-is; if they never joined, leave status unchanged (scheduler will mark absent later)
-    await att.save();
-    res.json({ success: true, leftAt: now });
+    // Only set leftAt when the student is present and leftAt is not already set
+    const curStatus = String(att.status || '').toLowerCase();
+    if ((curStatus === 'present' || !!att.joinedAt) && !att.leftAt) {
+      // Ensure leftAt is strictly after joinedAt to avoid equal timestamps
+      if (att.joinedAt && now <= new Date(att.joinedAt)) {
+        att.leftAt = new Date(new Date(att.joinedAt).getTime() + 1000);
+      } else {
+        att.leftAt = now;
+      }
+      await att.save();
+      return res.json({ success: true, leftAt: att.leftAt });
+    }
+
+    // Nothing to update (either already left or was not present)
+    return res.json({ success: true, leftAt: att.leftAt || null, message: 'No update performed' });
   }),
   recordLiveSessionAttendance,
   updateLiveSessionAttendance,
   getLiveSessionAttendance,
   getStudentLiveSessionAttendance
 };
+
+// Beacon-compatible leave that accepts token via query or body and verifies JWT manually
+module.exports.leaveEventBeacon = asyncHandler(async (req, res) => {
+  const eventId = req.params.eventId || req.body.eventId;
+  const token = req.query.token || (req.body && req.body.token) || null;
+  if (!eventId) {
+    res.status(400);
+    throw new Error('eventId is required');
+  }
+  if (!token) {
+    // no token — cannot identify user; respond success to avoid blocking unload
+    return res.json({ success: true, leftAt: null, message: 'No token provided' });
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (e) {
+    return res.json({ success: true, leftAt: null, message: 'Invalid token' });
+  }
+  const user = await User.findById(decoded.id).lean();
+  if (!user) return res.json({ success: true, leftAt: null, message: 'User not found' });
+
+  // Reuse leaveEvent logic but operate without protect middleware
+  const userId = user._id;
+  const now = new Date();
+  const att = await Attendance.findOne({ eventId, studentId: userId });
+  if (!att) return res.json({ success: true, leftAt: null, message: 'No attendance record to update' });
+
+  const curStatus = String(att.status || '').toLowerCase();
+  if ((curStatus === 'present' || !!att.joinedAt) && !att.leftAt) {
+    if (att.joinedAt && now <= new Date(att.joinedAt)) {
+      att.leftAt = new Date(new Date(att.joinedAt).getTime() + 1000);
+    } else {
+      att.leftAt = now;
+    }
+    await att.save();
+    return res.json({ success: true, leftAt: att.leftAt });
+  }
+
+  return res.json({ success: true, leftAt: att.leftAt || null, message: 'No update performed' });
+});

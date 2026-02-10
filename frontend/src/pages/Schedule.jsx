@@ -2464,21 +2464,40 @@ function Schedule() {
                           await api.joinAttendance(classItem._id).catch(() => {});
                         } catch (e) { /* ignore */ }
 
+                        // Setup reliable leave handling: use beacon on unload, and poll popup close as fallback
+                        const handleUnload = () => {
+                          try {
+                            // Best-effort beacon call; api.leaveAttendanceBeacon handles fallback
+                            if (api && typeof api.leaveAttendanceBeacon === 'function') {
+                              api.leaveAttendanceBeacon(classItem._id);
+                            } else {
+                              // Last-resort synchronous fetch (not ideal)
+                              navigator.sendBeacon && navigator.sendBeacon(`/api/attendance/${classItem._id}/leave-beacon`);
+                            }
+                          } catch (e) { /* ignore */ }
+                        };
+                        window.addEventListener('beforeunload', handleUnload);
+                        window.addEventListener('pagehide', handleUnload);
+
                         // Open the meet in a new window and monitor it.
                         win = window.open(classItem.meetLink, '_blank');
 
-                        // Poll for the window being closed to record leftAt
+                        // Poll for the window being closed to record leftAt and remove listeners
                         if (win) {
                           const poll = setInterval(async () => {
                             try {
                               if (win.closed) {
                                 clearInterval(poll);
                                 try {
-                                  await api.leaveAttendance(classItem._id).catch(() => {});
+                                  await (api.leaveAttendanceBeacon ? api.leaveAttendanceBeacon(classItem._id) : api.leaveAttendance(classItem._id)).catch(() => {});
                                 } catch (e) { /* ignore */ }
+                                window.removeEventListener('beforeunload', handleUnload);
+                                window.removeEventListener('pagehide', handleUnload);
                               }
                             } catch (e) {
                               clearInterval(poll);
+                              window.removeEventListener('beforeunload', handleUnload);
+                              window.removeEventListener('pagehide', handleUnload);
                             }
                           }, 1000);
                         } else {
