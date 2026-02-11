@@ -58,22 +58,47 @@ const joinAttendance = asyncHandler(async (req, res) => {
     res.status(403);
     throw new Error('User not enrolled in this event/course');
   }
+  // Enforce maxStudents atomically on the Event document to avoid race conditions.
+  // If student already has a joinedAt (already joined) — return success immediately.
+  const existing = await Attendance.findOne({ eventId, studentId: userId }).lean();
+  if (existing && existing.joinedAt) {
+    return res.status(200).json({ success: true, attendance: existing });
+  }
 
-  // Create or update attendance as present
-  // Use $setOnInsert to avoid replacing the whole document (avoid accidental replacement)
-  // and preserve existing `joinedAt` if already set. Also ensure eventId/courseId/studentId
-  // are present on insert.
+  // If event.maxStudents is set, attempt to atomically increment joinedCount only when below max
+  if (typeof event.maxStudents === 'number' && event.maxStudents >= 0) {
+    const updatedEvent = await Event.findOneAndUpdate(
+      { _id: eventId, $expr: { $lt: ["$joinedCount", "$maxStudents"] } },
+      { $inc: { joinedCount: 1 } },
+      { new: true }
+    ).lean();
+
+    if (!updatedEvent) {
+      res.status(400);
+      throw new Error('Student limit has exceeded for this event.');
+    }
+  }
+
+  // Create or update attendance as present. If an existing attendance doc exists but has no joinedAt,
+  // set joinedAt and status. If no document exists, create one.
   const now = new Date();
-  const filter = { eventId, studentId: userId };
-  const update = {
-    $set: { status: 'present' },
-    $setOnInsert: { eventId, courseId: event.course || null, studentId: userId, joinedAt: now }
-  };
-  const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
+  try {
+    if (existing) {
+      // existing document without joinedAt: update in-place
+      await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } });
+      const refreshed = await Attendance.findById(existing._id).lean();
+      return res.status(200).json({ success: true, attendance: refreshed });
+    }
 
-  const attendance = await Attendance.findOneAndUpdate(filter, update, opts);
-
-  res.status(200).json({ success: true, attendance });
+    const created = await Attendance.create({ eventId, courseId: event.course || null, studentId: userId, joinedAt: now, status: 'present' });
+    return res.status(200).json({ success: true, attendance: created });
+  } catch (err) {
+    // If we incremented joinedCount on the event but failed to create attendance, roll back the increment
+    try {
+      await Event.findByIdAndUpdate(eventId, { $inc: { joinedCount: -1 } });
+    } catch (e) { /* swallow rollback error, but log */ console.warn('Failed to rollback joinedCount', e); }
+    throw err;
+  }
 });
 
 // POST /api/attendance/mark-absent
@@ -871,6 +896,8 @@ module.exports = {
         att.leftAt = now;
       }
       await att.save();
+      // decrement joinedCount since this student left (free up slot)
+      try { await Event.findByIdAndUpdate(eventId, { $inc: { joinedCount: -1 } }); } catch (e) { console.warn('Failed to decrement joinedCount on leave', e); }
       return res.json({ success: true, leftAt: att.leftAt });
     }
 
@@ -918,6 +945,8 @@ module.exports.leaveEventBeacon = asyncHandler(async (req, res) => {
       att.leftAt = now;
     }
     await att.save();
+    // decrement joinedCount since this student left (free up slot)
+    try { await Event.findByIdAndUpdate(eventId, { $inc: { joinedCount: -1 } }); } catch (e) { console.warn('Failed to decrement joinedCount on leave (beacon)', e); }
     return res.json({ success: true, leftAt: att.leftAt });
   }
 

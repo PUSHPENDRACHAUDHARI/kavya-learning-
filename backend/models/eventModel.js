@@ -46,6 +46,12 @@ const eventSchema = new mongoose.Schema({
         required: true,
         default: 30
     },
+    // current number of students who have actually joined (used for enforcing maxStudents safely)
+    joinedCount: {
+        type: Number,
+        required: false,
+        default: 0
+    },
     enrolledStudents: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
