@@ -12,6 +12,63 @@
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Overlay text box on left panel */
+
+.overlay-text {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 60px;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+/* blurred background image layer (keeps text sharp) */
+.login-left::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--login-left-img);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(4px);
+    transform: scale(1.03);
+    z-index: 0;
+}
+
+/* subtle semi-transparent tint to reduce blue intensity */
+.login-left::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(102,126,234,0.22), rgba(118,75,162,0.22));
+    z-index: 1;
+}
+
+.overlay-text { z-index: 2; }
+
+.overlay-text h1 {
+    color: #fff;
+    font-size: 48px;
+    line-height: 1.05;
+    margin: 0;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.overlay-text h1 span {
+    color: #ff9a00;
+}
+
+@media (max-width: 900px) {
+    .overlay-text h1 { font-size: 22px; padding-top: 18px; }
+    .overlay-text { padding: 18px; }
 }
 
 /* RIGHT SIDE */

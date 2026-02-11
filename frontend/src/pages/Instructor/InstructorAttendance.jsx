@@ -6,6 +6,9 @@ import './InstructorAttendance.css';
 
 function InstructorAttendance() {
   const [events, setEvents] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 12;
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
@@ -31,7 +34,48 @@ function InstructorAttendance() {
       }
     };
     fetchEvents();
+    setCurrentPage(1);
   }, []);
+
+  // listen for events deleted elsewhere (admin) and remove locally
+  useEffect(() => {
+    const handler = (e) => {
+      const id = e?.detail?.eventId;
+      if (!id) return;
+      setEvents(prev => prev.filter(ev => String(ev._id) !== String(id)));
+    };
+    window.addEventListener('eventDeleted', handler);
+    return () => window.removeEventListener('eventDeleted', handler);
+  }, []);
+
+  // Reset to first page when events change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [events.length]);
+
+  // Reset to first page when the search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Derived lists for filtering and pagination
+  const term = (searchTerm || '').toString().trim().toLowerCase();
+
+  // remove events that have no meaningful display data (avoid rows with only '-')
+  const meaningfulEvents = events.filter(ev => {
+    const title = (ev.title || ev.name || '').toString().trim();
+    const hasInstructor = !!(ev.instructor || ev.instructorName);
+    const hasDate = !!ev.date;
+    const hasTime = !!(ev.startTime || ev.endTime);
+    return title !== '' || hasInstructor || hasDate || hasTime;
+  });
+
+  const filteredEvents = term ? meaningfulEvents.filter(ev => ((ev.title || ev.name || '') + '').toLowerCase().includes(term)) : meaningfulEvents;
+  const totalFiltered = filteredEvents.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(totalFiltered, startIndex + pageSize);
+  const pagedEvents = filteredEvents.slice(startIndex, endIndex);
 
   const handleViewAttendance = async (event) => {
     setAttendanceLoading(true);
@@ -168,14 +212,16 @@ function InstructorAttendance() {
       doc.text(`Present: ${presentCount}   Absent: ${absentCount}   Total: ${totalCount}`, marginLeft, yPosition);
       yPosition += 10;
 
-      // Prepare table data and headers (Left At removed)
-      const tableHeaders = ['Student Name', 'Status', 'Joined At'];
+      // Prepare table data and headers (include Left At column)
+      const tableHeaders = ['Student Name', 'Status', 'Joined At', 'Left At'];
       const tableData = attendanceList.map(a => {
         const studentName = a.studentName || a.name || a.email || a.studentId || 'Unknown';
-        const status = (a.status || 'Absent');
-        const isPresent = (String(status || '').toLowerCase() === 'present');
+        const status = a.status || 'Absent';
+        const isPresent = String(status || '').toLowerCase() === 'present';
         const joinedAt = isPresent && a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-';
-        return [studentName, status, joinedAt];
+        const leftAt = isPresent && a.leftAt ? new Date(a.leftAt).toLocaleString() : '-';
+        // For absent students ensure Joined/Left show '-'
+        return [studentName, status, joinedAt, leftAt];
       });
 
       // Use autoTable with striped/grid style and a blue header like Image 2
@@ -194,7 +240,7 @@ function InstructorAttendance() {
             },
             bodyStyles: { fontSize: 10, textColor: [34, 34, 34] },
             alternateRowStyles: { fillColor: [245, 245, 245] },
-            columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 40 }, 2: { cellWidth: 50 } },
+            columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 30 }, 2: { cellWidth: 45 }, 3: { cellWidth: 45 } },
             margin: { left: marginLeft, right: marginLeft },
             didDrawPage: function(data) {
               // Footer with timestamp and page number
@@ -223,33 +269,54 @@ function InstructorAttendance() {
         const lineHeight = 6;
         let cursorY = yPosition;
 
-        // Header
+        // Define column X positions based on usableWidth
+        const colWidths = [usableWidth * 0.45, usableWidth * 0.15, usableWidth * 0.2, usableWidth * 0.2];
+        const colX = [marginLeft, marginLeft + colWidths[0], marginLeft + colWidths[0] + colWidths[1], marginLeft + colWidths[0] + colWidths[1] + colWidths[2]];
+
+        // Draw header background
+        doc.setFillColor(41, 108, 176);
+        doc.rect(marginLeft - 2, cursorY - 6, usableWidth + 4, 8, 'F');
+
+        // Header text
         doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
         doc.setFont(undefined, 'bold');
-        doc.text(tableHeaders.join(' | '), marginLeft, cursorY);
+        doc.text(tableHeaders[0], colX[0], cursorY);
+        doc.text(tableHeaders[1], colX[1], cursorY);
+        doc.text(tableHeaders[2], colX[2], cursorY);
+        doc.text(tableHeaders[3], colX[3], cursorY);
         cursorY += lineHeight;
 
         doc.setFont(undefined, 'normal');
         doc.setFontSize(9);
+        doc.setTextColor(34, 34, 34);
 
+        // Rows
         for (let i = 0; i < tableData.length; i++) {
           const row = tableData[i];
-          const rowText = row.join(' | ');
-          // add page if needed
-          if (cursorY > pageHeight - 20) {
+          // page break
+          if (cursorY > pageHeight - 30) {
             doc.addPage();
             cursorY = 20;
           }
-          doc.text(rowText, marginLeft, cursorY);
+
+          // Row text aligned to columns
+          doc.text(String(row[0] || '-'), colX[0], cursorY, { maxWidth: colWidths[0] - 4 });
+          doc.text(String(row[1] || '-'), colX[1], cursorY, { maxWidth: colWidths[1] - 4 });
+          doc.text(String(row[2] || '-'), colX[2], cursorY, { maxWidth: colWidths[2] - 4 });
+          doc.text(String(row[3] || '-'), colX[3], cursorY, { maxWidth: colWidths[3] - 4 });
+
+          // Optional row separator
           cursorY += lineHeight;
         }
 
-        // Add footer to all pages
+        // Footer on all pages
         const pageCount = doc.internal.getNumberOfPages();
         for (let p = 1; p <= pageCount; p++) {
           doc.setPage(p);
           doc.setFontSize(8);
           doc.setFont(undefined, 'normal');
+          doc.setTextColor(60,60,60);
           doc.text(`Generated on ${new Date().toLocaleString()}`, 15, pageHeight - 10);
           doc.text(`Page ${p} of ${pageCount}`, pageWidth - 40, pageHeight - 10);
         }
@@ -268,7 +335,7 @@ function InstructorAttendance() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 20 }}>
+      <div className="attendance-container" style={{ padding: 20 }}>
         <h3>Instructor Attendance</h3>
 
         {loading && <div style={{ marginTop: 18 }}>Loading events...</div>}
@@ -276,7 +343,26 @@ function InstructorAttendance() {
         {!loading && (
           <div style={{ marginTop: 24 }}>
             {events.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+              <>
+              <div className="attendance-header" style={{ marginBottom: 12 }}>
+                <div className="search-group" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ marginRight: 6, color: '#333', fontWeight: 600 }}>Search:</label>
+                  <input
+                    className="search-input"
+                    type="search"
+                    placeholder="Search session name"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', minWidth: 260 }}
+                  />
+                </div>
+                <div className="total-events" style={{ color: '#555', fontSize: 14 }}>
+                  <strong>Total Events:</strong> {meaningfulEvents.length}
+                </div>
+              </div>
+
+              <div className="attendance-table-wrapper">
+              <table className="attendance-table" style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
                 <thead>
                   <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #dee2e6' }}>
                     <th style={{ padding: 12, textAlign: 'left', fontWeight: 600 }}>Name</th>
@@ -287,8 +373,8 @@ function InstructorAttendance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {events.map(event => (
-                      <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
+                  {pagedEvents.map(event => (
+                    <tr key={event._id} style={{ borderBottom: '1px solid #dee2e6' }}>
                       <td style={{ padding: 12 }}>{getCreatorName(event)}</td>
                       <td style={{ padding: 12 }}>{event.title || event.name || '-'}</td>
                       <td style={{ padding: 12 }}>{formatDate(event.date)}</td>
@@ -313,6 +399,22 @@ function InstructorAttendance() {
                   ))}
                 </tbody>
               </table>
+
+              {/* Pagination Controls */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                <div style={{ color: '#555' }}>
+                  Showing {filteredEvents && filteredEvents.length > 0 ? (Math.min(filteredEvents.length, (currentPage - 1) * pageSize + 1)) : 0} - {filteredEvents && filteredEvents.length > 0 ? Math.min(filteredEvents.length, currentPage * pageSize) : 0} of {filteredEvents ? filteredEvents.length : 0}
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button className="btn btn-sm btn-light" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>First</button>
+                  <button className="btn btn-sm btn-light" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <span style={{ minWidth: 120, textAlign: 'center' }}>Page {currentPage} of {Math.max(1, Math.ceil((filteredEvents ? filteredEvents.length : 0) / pageSize))}</span>
+                  <button className="btn btn-sm btn-light" onClick={() => setCurrentPage(p => Math.min(Math.max(1, Math.ceil((filteredEvents ? filteredEvents.length : 0) / pageSize)), p + 1))} disabled={currentPage >= Math.ceil((filteredEvents ? filteredEvents.length : 0) / pageSize)}>Next</button>
+                  <button className="btn btn-sm btn-light" onClick={() => setCurrentPage(Math.max(1, Math.ceil((filteredEvents ? filteredEvents.length : 0) / pageSize)))} disabled={currentPage >= Math.ceil((filteredEvents ? filteredEvents.length : 0) / pageSize)}>Last</button>
+                </div>
+              </div>
+              </div>
+              </>
             ) : (
               <div style={{ marginTop: 18, padding: 18, background: '#fff', borderRadius: 8 }}>
                 No events available

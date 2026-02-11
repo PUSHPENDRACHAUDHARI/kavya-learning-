@@ -1148,6 +1148,64 @@ function Schedule() {
     return (end - start) / 60;
   }
 
+  // Helper: parse a single time like "1:30 PM" into {hours, minutes}
+  function parseTimePart(t) {
+    if (!t) return null;
+    const parts = t.trim().split(' ');
+    const time = parts[0];
+    const meridian = parts[1] ? parts[1].toUpperCase() : null;
+    const [hhStr, mmStr] = time.split(':');
+    let hh = parseInt(hhStr, 10);
+    const mm = mmStr ? parseInt(mmStr, 10) : 0;
+    if (isNaN(hh) || isNaN(mm)) return null;
+    if (meridian) {
+      if (meridian === 'PM' && hh !== 12) hh += 12;
+      if (meridian === 'AM' && hh === 12) hh = 0;
+    }
+    return { hh, mm };
+  }
+
+  // Helper: build start/end Date objects for an event using `time` (range) or `startTime`/`endTime`.
+  function getEventStartEnd(event) {
+    try {
+      if (!event || !event.date) return { start: null, end: null };
+      const base = new Date(event.date);
+      if (isNaN(base)) return { start: null, end: null };
+
+      // Prefer explicit startTime / endTime fields if present
+      if (event.startTime || event.endTime) {
+        const sPart = parseTimePart(event.startTime || '');
+        const ePart = parseTimePart(event.endTime || '');
+        const start = sPart ? new Date(base) : null;
+        const end = ePart ? new Date(base) : null;
+        if (start) start.setHours(sPart.hh, sPart.mm, 0, 0);
+        if (end) end.setHours(ePart.hh, ePart.mm, 0, 0);
+        return { start, end };
+      }
+
+      // Fallback to `time` string like "1:00 PM - 2:30 PM"
+      if (event.time && typeof event.time === 'string') {
+        const parts = event.time.split('-').map(p => p.trim());
+        const sPart = parseTimePart(parts[0] || '');
+        const ePart = parseTimePart(parts[1] || '');
+        const start = sPart ? new Date(base) : null;
+        const end = ePart ? new Date(base) : null;
+        if (start) start.setHours(sPart.hh, sPart.mm, 0, 0);
+        if (end) end.setHours(ePart.hh, ePart.mm, 0, 0);
+        return { start, end };
+      }
+
+      // No time info: treat event as all-day — start at 00:00, end at 23:59:59
+      const start = new Date(base);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(base);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    } catch (e) {
+      return { start: null, end: null };
+    }
+  }
+
   // Compute weekly stats derived from `classes` for the current week
   async function computeWeeklyStats() {
     try {
@@ -1160,14 +1218,44 @@ function Schedule() {
       let upcoming = 0;
       let studyHours = 0;
 
+      const now = new Date();
       classes.forEach((c) => {
         const d = new Date(c.date);
         if (isNaN(d)) return;
-        d.setHours(0, 0, 0, 0);
-        if (d >= start && d <= end) {
-          if (c.status === 'Completed') attended += 1;
-          else upcoming += 1;
-          studyHours += parseDuration(c.time || '');
+        // Compare by date to determine week membership
+        const dDay = new Date(d);
+        dDay.setHours(0, 0, 0, 0);
+        if (dDay >= start && dDay <= end) {
+          // Determine event start/end datetimes
+          const { start: evStart, end: evEnd } = getEventStartEnd(c);
+
+          // If we have an end time, use it to decide completed vs upcoming
+          let isCompleted = false;
+          if (evEnd) {
+            isCompleted = evEnd <= now;
+          } else if (c.status) {
+            // Fallback: if event marked Completed, treat as completed
+            isCompleted = String(c.status).toLowerCase() === 'completed';
+          } else {
+            // No precise end time: treat event as completed if the day has passed
+            const endOfDay = new Date(d);
+            endOfDay.setHours(23, 59, 59, 999);
+            isCompleted = endOfDay <= now;
+          }
+
+          if (isCompleted) {
+            attended += 1;
+            // add study hours only for completed events (use precise duration if available)
+            if (evStart && evEnd) {
+              const diffHrs = (evEnd.getTime() - evStart.getTime()) / (1000 * 60 * 60);
+              if (!isNaN(diffHrs) && diffHrs > 0) studyHours += diffHrs;
+            } else {
+              // fallback to parsing duration string
+              studyHours += parseDuration(c.time || '');
+            }
+          } else {
+            upcoming += 1;
+          }
         }
       });
 
@@ -1211,6 +1299,14 @@ function Schedule() {
   // Recompute weekly stats when classes, current week or user changes
   useEffect(() => {
     computeWeeklyStats();
+  }, [classes, weekStart, userProfile]);
+
+  // Also recompute periodically (every 60s) so counts update as time passes
+  useEffect(() => {
+    const id = setInterval(() => {
+      computeWeeklyStats();
+    }, 60 * 1000);
+    return () => clearInterval(id);
   }, [classes, weekStart, userProfile]);
 
   // Load events for the current week and populate `classes` so the side-panel stats and week view work

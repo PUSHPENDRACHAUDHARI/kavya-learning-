@@ -110,6 +110,7 @@ function Sidebar({ isOpen, setIsOpen }) {
       ...(userRole === 'admin' || userRole === 'sub-admin' ? [
       { path: "/admin/dashboard", label: "Admin Dashboard", icon: <TbReportAnalytics /> },
       { path: "/admin/announcements", label: "Announcements", icon: <MdAnnouncement /> },
+      { path: "/admin/attendance", label: "Attendance", icon: <MdEditDocument /> },
       { path: "/admin/lessons", label: "Manage Lessons", icon: <MdAutoStories /> },
       { path: "/admin/students", label: "Manage Students", icon: <MdPerson /> },
       { path: "/admin/instructors", label: "Manage Instructors", icon: <MdCastForEducation /> },

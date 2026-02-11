@@ -27,6 +27,7 @@ import AdminNotes from './pages/Admin/AdminNotes';
 import AdminSettings from './pages/Admin/AdminSettings';
 import AdminAnnouncements from './pages/Admin/AdminAnnouncements';
 import AdminLessons from './pages/Admin/AdminLessons';
+import AdminAttendance from './pages/Admin/AdminAttendance';
 import StudentAnnouncements from './pages/Student/Announcements';
 import InstructorAnnouncements from './pages/Instructor/Announcements';
 import ParentAnnouncements from './pages/Parent/Announcements';
@@ -107,6 +108,7 @@ function Layout() {
           <Route path="/admin/instructors" element={<ProtectedRoute requireAdmin={true}><AdminInstructors /></ProtectedRoute>} />
           <Route path="/admin/courses" element={<ProtectedRoute requireAdmin={true}><AdminCourses /></ProtectedRoute>} />
           <Route path="/admin/lessons" element={<ProtectedRoute requireAdmin={true}><AdminLessons /></ProtectedRoute>} />
+          <Route path="/admin/attendance" element={<ProtectedRoute requireAdmin={true}><AdminAttendance /></ProtectedRoute>} />
           <Route path="/admin/enrollments" element={<ProtectedRoute requireAdmin={true}><AdminEnrollments /></ProtectedRoute>} />
           <Route path="/admin/notes" element={<ProtectedRoute requireAdmin={true}><AdminNotes /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminSettings /></ProtectedRoute>} />

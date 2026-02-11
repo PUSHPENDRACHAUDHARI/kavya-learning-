@@ -32,6 +32,18 @@ const resolveCourseLogo = (course) => {
   return fallbackLogo;
 };
 
+// Format duration (minutes) into hours + minutes and also show total minutes
+const formatDuration = (mins) => {
+  if (mins == null || mins === '') return '';
+  const n = Number(mins);
+  if (Number.isNaN(n)) return String(mins);
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m (${n} mins)`;
+  if (h > 0) return `${h}h (${n} mins)`;
+  return `${n} mins`;
+};
+
 // CourseCard Component
 function CourseCard({ course, onEnroll, isFavorite, onToggleFavorite }) {
   return (
@@ -237,7 +249,38 @@ function CourseListing({ onCourseSelect }) {
 // CourseDetail Component
 function CourseDetail({ course, onBack }) {
   const [expandedFaqs, setExpandedFaqs] = useState({});
+  const [lessons, setLessons] = useState([]);
   const navigate = useNavigate(); // <-- Added
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!course || !course.id) return;
+        const token = localStorage.getItem('token');
+        const qs = `/api/lessons?courseId=${encodeURIComponent(course.id)}`;
+        const res = await fetch(qs, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
+        if (!mounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          // API returns an array of lessons
+          if (Array.isArray(data)) setLessons(data);
+          else if (Array.isArray(data.data)) setLessons(data.data);
+        } else {
+          setLessons([]);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch lessons for course', err);
+        setLessons([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [course && course.id]);
 
   if (!course) return null;
 
@@ -417,24 +460,27 @@ function CourseDetail({ course, onBack }) {
         <div className="section">
           <div className="section-header">
             <h2 className="section-title">Course Content</h2>
-            <span className="sections-count">
-              {course.sections.length} Sections
-            </span>
+            <span className="sections-count">{lessons.length || (course.sections && course.sections.length) || 0} Lessons</span>
           </div>
 
           <div className="sections-list">
-            {course.sections.map((section, index) => (
-              <div key={index} className="section-item">
-                <div className="section-item-left">
-                  <ChevronRight size={20} className="section-icon" />
-                  <span className="section-name">{section.title}</span>
+            {(lessons && lessons.length > 0 ? lessons : (course.sections || [])).map((item, index) => {
+              // item may be a lesson object or a section fallback
+              const title = item.title || item.name || `Section ${index + 1}`;
+              const dur = item.duration != null ? (typeof item.duration === 'number' ? formatDuration(item.duration) : item.duration) : '';
+              return (
+                <div key={item._id || index} className="section-item">
+                  <div className="section-item-left">
+                    <div className="lesson-serial">{index + 1}.</div>
+                    <span className="section-name">{title}</span>
+                  </div>
+                  <div className="section-item-right">
+                    <Clock size={16} />
+                    <span>{dur}</span>
+                  </div>
                 </div>
-                <div className="section-item-right">
-                  <Clock size={16} />
-                  <span>{section.duration}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="faqs-section">

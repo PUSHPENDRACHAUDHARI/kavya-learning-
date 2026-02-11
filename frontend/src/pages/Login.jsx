@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import "../assets/Login.css";
+import LoginLeftImg from "../assets/Login_image.png";
  
 function LoginPage() {
   const navigate = useNavigate();
@@ -123,11 +124,12 @@ function LoginPage() {
       <div
         className="login-left"
         style={{
-          background:
-            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          background: "linear-gradient(135deg, rgba(102,126,234,0.18), rgba(118,75,162,0.18))",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
+          // expose image URL to CSS for pseudo-element blur
+          ["--login-left-img"]: `url(${LoginLeftImg})`,
         }}
       >
         <div className="overlay-text">
