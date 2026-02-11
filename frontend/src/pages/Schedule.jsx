@@ -2557,8 +2557,17 @@ function Schedule() {
                         const api = await import('../api');
                         // Mark present (joinedAt) but don't block opening the meet
                         try {
-                          await api.joinAttendance(classItem._id).catch(() => {});
-                        } catch (e) { /* ignore */ }
+                          await api.joinAttendance(classItem._id);
+                        } catch (e) {
+                          // If server reports capacity reached, show a clear message and do not open the meeting link
+                          const msg = (e && e.message) ? String(e.message) : 'Failed to join event';
+                          if (msg.toLowerCase().includes('limit') || msg.toLowerCase().includes('exceeded')) {
+                            alert('Student limit has exceeded for this event.');
+                            return;
+                          }
+                          // otherwise, ignore join errors but proceed to open meet (legacy behavior)
+                          console.warn('joinAttendance failed', e);
+                        }
 
                         // Setup reliable leave handling: use beacon on unload, and poll popup close as fallback
                         const handleUnload = () => {

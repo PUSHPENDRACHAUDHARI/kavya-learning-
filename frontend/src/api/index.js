@@ -274,7 +274,15 @@ export async function getUpcomingClasses(limit = 20, page = 1) {
 // ===== Attendance =====
 export async function joinAttendance(eventId) {
   const res = await fetch(`${BASE}/attendance/join`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ eventId }) });
-  return res.json();
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = (body && (body.message || body.error || body.msg)) || 'Failed to join event';
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
 }
 
 export async function getAttendanceForEvent(eventId) {
