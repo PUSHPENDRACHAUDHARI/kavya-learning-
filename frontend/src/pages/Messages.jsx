@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { FiSend } from 'react-icons/fi';
 import AppLayout from '../components/AppLayout';
 import axiosClient from '../api/axiosClient';
 import { io as ioClient } from 'socket.io-client';
@@ -665,17 +666,39 @@ export default function Messages() {
           )}
 
           <form onSubmit={handleSend} className="message-send-form">
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder={selectedStudent ? `Message ${selectedStudent.fullName || 'student'}` : 'Select a student to message'} className="message-input" disabled={!selectedStudent} />
             <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf" onChange={handleAttachFile} style={{ display: 'none' }} />
+
+            {/* Attachment button on the left */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               title="Attach file"
               className="attach-btn"
+              aria-label="Attach file"
             >
               📎
             </button>
-            <button className="btn btn-primary" type="submit" disabled={!selectedStudent || (!input.trim() && attachedFiles.length === 0)}>Send</button>
+
+            {/* Flexible message input in the middle */}
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder={selectedStudent ? `Message ${selectedStudent.fullName || 'student'}` : 'Select a student to message'}
+              className="message-input"
+              disabled={!selectedStudent}
+              aria-label="Message input"
+            />
+
+            {/* Small send button on the right */}
+            <button
+              className="btn btn-primary send-btn"
+              type="submit"
+              disabled={!selectedStudent || (!input.trim() && attachedFiles.length === 0)}
+              aria-label="Send message"
+            >
+              <span className="send-text">➤</span>
+              
+            </button>
           </form>
         </div>
       </div>

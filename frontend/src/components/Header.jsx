@@ -45,6 +45,16 @@ function Header({ onToggleSidebar, children }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef(null);
 
+  // Detect if current user is a student so we can hide the global search for student panel
+  const isStudentRole = (() => {
+    try {
+      const r = (localStorage.getItem('userRole') || '').toString();
+      return r.toLowerCase().includes('student');
+    } catch (e) {
+      return false;
+    }
+  })();
+
   // Expanded client-side route index with templates for dynamic routes
   const ROUTE_INDEX = [
     { type: 'page', id: 'dashboard', title: 'Dashboard', route: '/dashboard' },
@@ -820,10 +830,12 @@ function Header({ onToggleSidebar, children }) {
       </div>
  
       <div className="header-right" style={{ position: "relative" }}>
-        {/* Global Search Bar */}
-        <div style={{ display: 'inline-block', marginRight: '12px', verticalAlign: 'middle' }}>
-          <SearchBox />
-        </div>
+        {/* Global Search Bar (hidden for student role) */}
+        {!isStudentRole && (
+          <div style={{ display: 'inline-block', marginRight: '12px', verticalAlign: 'middle' }}>
+            <SearchBox />
+          </div>
+        )}
 
         {/* Notification Icon */}
         <div ref={notificationRef} style={{ display: "inline-block", position: "relative", marginRight: "15px" }}>

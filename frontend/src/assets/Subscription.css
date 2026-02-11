@@ -881,12 +881,12 @@ body {
   color: #000 !important;
 }
 
-/* Favorite / Pin button */
+/* Favorite / Pin button: placed below the Enroll button in the card */
 .favorite-btn {
-  position: absolute;
-  top: 0.6rem;
-  left: 0.6rem;
-  background: rgba(255,255,255,0.8);
+  /* placed in document flow so it appears under actions */
+  position: static;
+  margin: 0.75rem auto 0;
+  background: rgba(255,255,255,0.96);
   border: none;
   width: 36px;
   height: 36px;
@@ -898,7 +898,7 @@ body {
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
   transition: transform 0.14s ease, background-color 0.14s ease, color 0.14s ease;
   color: #9ca3af;
-  z-index: 10;
+  align-self: center;
 }
 
 .favorite-btn:hover {
@@ -1166,22 +1166,63 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .message-input {
-  flex: 1;
+  flex: 1 1 auto;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #ddd;
+  height: 40px;
+  box-sizing: border-box;
+  font-size: 14px;
+  min-width: 0; /* allow input to shrink and avoid pushing send button out */
 }
 
 .attach-btn {
-  padding: 10px 12px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   background: #f0f0f0;
   border: 1px solid #ddd;
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-send-form .btn {
+  /* Prevent bootstrap .btn from stretching */
+  min-width: 0;
+  width: auto;
+  padding: 8px 12px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap; /* keep label on one line */
+}
+
+.send-btn {
+  border-radius: 8px;
+}
+
+/* Send button: show text on larger screens, icon-only on small screens */
+.send-btn .send-icon { display: none; }
+.send-btn .send-text { display: inline-block; }
+
+@media (max-width: 480px) {
+  .send-btn {
+    width: 40px;
+    padding: 0;
+    border-radius: 8px;
+  }
+  .send-btn .send-text { display: none; }
+  .send-btn .send-icon { display: inline-flex; align-items: center; justify-content: center; font-size: 18px; }
 }
 
 @media (max-width: 768px) {
