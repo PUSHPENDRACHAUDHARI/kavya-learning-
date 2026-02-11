@@ -13,9 +13,10 @@
   border-bottom: 2px solid #e5e7eb;
 }
 
-.attendance-header h1 {
+.attendance-header h1,
+.attendance-header h3 {
   margin: 0;
-  color: #1f2937;
+  color: #0b0b0b;
   font-size: 28px;
   font-weight: 700;
 }
@@ -71,7 +72,9 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
 }
 
 .attendance-table {
@@ -79,9 +82,14 @@
   border-collapse: collapse;
 }
 
+/* Ensure table can scroll horizontally on small screens */
+.attendance-table {
+  min-width: 680px;
+}
+
 .attendance-table thead {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #0b0b0b;
   font-weight: 600;
 }
 
@@ -351,6 +359,41 @@
 
   .status-badge {
     align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .attendance-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .attendance-header .search-group {
+    width: 100%;
+  }
+
+  .attendance-header .search-group .search-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .attendance-header .total-events {
+    width: 100%;
+    text-align: left;
+    color: #374151;
+    font-size: 13px;
+  }
+
+  /* Stack action buttons inside table rows on very small screens */
+  .attendance-table td .btn {
+    display: block;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .attendance-table {
+    font-size: 13px;
   }
 }
 
