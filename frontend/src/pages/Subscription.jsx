@@ -48,16 +48,6 @@ const formatDuration = (mins) => {
 function CourseCard({ course, onEnroll, isFavorite, onToggleFavorite }) {
   return (
     <div className="course-card">
-      <button
-        className={`favorite-btn ${isFavorite ? 'favorite-active' : ''}`}
-        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-        onClick={(e) => { e.stopPropagation(); onToggleFavorite(course.id); }}
-        title={isFavorite ? 'Unpin from Favorites' : 'Pin to Favorites'}
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" className="favorite-icon" aria-hidden="true">
-          <path d="M12 21s-6.716-4.694-9.243-7.028C-1.424 10.124 1.5 6 5.5 6c2.245 0 3.5 1.5 6.5 1.5S16.255 6 18.5 6C22.5 6 25.424 10.124 21.243 13.972 18.716 16.306 12 21 12 21z" fill="currentColor" />
-        </svg>
-      </button>
 
       <div className="course-card-content">
         {course.isPremium && <span className="premium-badge">PREMIUM</span>}
@@ -106,6 +96,18 @@ function CourseCard({ course, onEnroll, isFavorite, onToggleFavorite }) {
           className="course-button"
         >
           Enroll Now
+        </button>
+
+        {/* favorite button moved below the Enroll button so it appears under the action */}
+        <button
+          className={`favorite-btn ${isFavorite ? 'favorite-active' : ''}`}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(course.id); }}
+          title={isFavorite ? 'Unpin from Favorites' : 'Pin to Favorites'}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" className="favorite-icon" aria-hidden="true">
+            <path d="M12 21s-6.716-4.694-9.243-7.028C-1.424 10.124 1.5 6 5.5 6c2.245 0 3.5 1.5 6.5 1.5S16.255 6 18.5 6C22.5 6 25.424 10.124 21.243 13.972 18.716 16.306 12 21 12 21z" fill="currentColor" />
+          </svg>
         </button>
       </div>
     </div>
