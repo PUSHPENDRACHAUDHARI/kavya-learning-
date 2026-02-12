@@ -20,6 +20,10 @@ async function main() {
     event = await Event.findById(event._id).lean();
   }
 
+  // Cleanup any existing attendance records for the test event to ensure a clean run
+  await Attendance.deleteMany({ eventId: event._id });
+  await Event.updateOne({ _id: event._id }, { $set: { joinedCount: 0 } });
+
   console.log('Test event id:', event._id.toString(), 'maxStudents:', event.maxStudents);
 
   // create 8 fake student ids
@@ -31,18 +35,18 @@ async function main() {
     try {
       let success = false;
       await session.withTransaction(async () => {
-        // allocate slot atomically
-        const allocated = await Event.findOneAndUpdate(
-          { _id: event._id, $expr: { $lt: ['$joinedCount', '$maxStudents'] } },
-          { $inc: { joinedCount: 1 } },
-          { session, new: true }
-        );
-        if (!allocated) {
+        // load fresh event inside transaction
+        const ev = await Event.findById(event._id).session(session).lean();
+        const count = await Attendance.countDocuments({ eventId: event._id, joinedAt: { $ne: null } }).session(session);
+        const max = (ev && typeof ev.maxStudents === 'number') ? ev.maxStudents : null;
+        if (max !== null && typeof max === 'number' && count >= max) {
           success = false;
           return;
         }
-        // insert attendance
+        // insert attendance inside the same transaction
         await Attendance.create([{ eventId: event._id, studentId, joinedAt: new Date(), status: 'present' }], { session });
+        // Optionally update joinedCount for stats
+        await Event.updateOne({ _id: event._id }, { $inc: { joinedCount: 1 } }).session(session);
         success = true;
       });
       return { studentId: studentId.toString(), success };

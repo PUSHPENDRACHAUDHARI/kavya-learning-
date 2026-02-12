@@ -10,12 +10,28 @@ const connectDB = async () => {
     try {
       const conn = await mongoose.connect(mongoUri);
       console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+
+      // Quick check: attempt to start a session to detect transaction support.
+      try {
+        const session = await mongoose.startSession();
+        session.endSession();
+        console.log('ℹ️ MongoDB supports sessions/transactions');
+        process.env.MONGO_SUPPORTS_TRANSACTIONS = 'true';
+      } catch (sessErr) {
+        console.warn('⚠️ MongoDB does not appear to support sessions/transactions');
+        process.env.MONGO_SUPPORTS_TRANSACTIONS = 'false';
+      }
+
       return;
     } catch (error) {
       console.error('❌ MongoDB connection error:', error.message);
       console.warn('Falling back to in-memory MongoDB (development only).');
     }
   } else {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('No MONGO_URI configured in production. Aborting startup.');
+      throw new Error('MONGO_URI is required in production');
+    }
     console.warn('No MONGO_URI configured — starting in-memory MongoDB for development.');
   }
 
