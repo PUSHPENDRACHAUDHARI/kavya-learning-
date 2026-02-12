@@ -29,13 +29,17 @@ const joinAttendance = asyncHandler(async (req, res) => {
     throw new Error('eventId is required');
   }
 
-  // Start a fresh mongoose session/transaction per request.
-  const session = await mongoose.startSession();
-  try {
-    let txResult = null;
-    await session.withTransaction(async () => {
-      // Load event inside transaction (existence + enrollment checks)
-      const event = await Event.findById(eventId).session(session);
+  // Determine whether transactions are available; use transactional flow when possible.
+  const supportsTransactions = (process.env.MONGO_SUPPORTS_TRANSACTIONS === 'true');
+
+  if (supportsTransactions) {
+    // Start a fresh mongoose session/transaction per request.
+    const session = await mongoose.startSession();
+    try {
+      let txResult = null;
+      await session.withTransaction(async () => {
+        // Load event inside transaction (existence + enrollment checks)
+        const event = await Event.findById(eventId).session(session);
       if (!event) {
         const err = new Error('Event not found');
         err.statusCode = 404;
@@ -80,55 +84,161 @@ const joinAttendance = asyncHandler(async (req, res) => {
         return;
       }
 
-      // Reconcile joinedCount with actual attendance count inside the transaction to avoid stale counters,
-      // then conditionally increment joinedCount to allocate a slot atomically.
+      // Strong atomic validation: count current attendance inside the same transaction
+      // and only insert when count < maxStudents. This avoids relying on any `joinedCount` field.
       const currentCount = await Attendance.countDocuments({ eventId, joinedAt: { $ne: null } }).session(session);
+      const max = (typeof event.maxStudents === 'number') ? event.maxStudents : null;
+      if (max !== null && typeof max === 'number' && currentCount >= max) {
+        const err = new Error('Student limit has exceeded for this event.');
+        err.statusCode = 409;
+        throw err;
+        }
 
-      if (typeof event.joinedCount !== 'number' || event.joinedCount !== currentCount) {
-        // Synchronize joinedCount to accurate value inside transaction
-        await Event.updateOne({ _id: eventId }, { $set: { joinedCount: currentCount } }).session(session);
+        // Insert attendance inside the transaction. If insert fails (e.g., duplicate), transaction rolls back.
+        const now = new Date();
+        if (existing) {
+          await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } }).session(session);
+          const refreshed = await Attendance.findById(existing._id).session(session).lean();
+          txResult = { success: true, attendance: refreshed };
+        } else {
+          // Populate required attendance fields from Event and User before creating
+          const user = await User.findById(userId).session(session).lean();
+          const instructorId = event.instructor || event.createdByUserId || null;
+          const attDoc = {
+            eventId,
+            courseId: event.course || null,
+            instructorId,
+            studentId: userId,
+            date: event.date || now,
+            subjectName: event.title || (event.subjectName || ''),
+            studentName: (user && (user.fullName || user.name)) || (user && user.email) || '',
+            studentEmail: (user && user.email) || '',
+            status: 'present',
+            joinedAt: now
+          };
+
+          const createdArr = await Attendance.create([attDoc], { session });
+          txResult = { success: true, attendance: createdArr && createdArr[0] ? createdArr[0].toObject() : null };
+        }
+      });
+
+      if (txResult) return res.status(200).json(txResult);
+      if (!res.headersSent) {
+        res.status(500);
+        throw new Error('Failed to join event');
+      }
+    } catch (err) {
+      const status = err && err.statusCode ? err.statusCode : (err && err.status ? err.status : 500);
+      if (!res.headersSent) {
+        res.status(status === 400 ? 409 : status).json({ success: false, message: err.message || 'Failed to join event' });
+      }
+      return;
+    } finally {
+      session.endSession();
+    }
+  } else {
+    // Fallback path for deployments without transactions: use atomic counter on Event.joinedCount
+    try {
+      // Load event (no transaction)
+      const event = await Event.findById(eventId).lean();
+      if (!event) {
+        const err = new Error('Event not found');
+        err.statusCode = 404;
+        throw err;
       }
 
-      // Atomic conditional increment on the Event document — this creates write contention
-      // so concurrent allocators cannot both succeed.
-      const allocated = await Event.findOneAndUpdate(
-        { _id: eventId, $expr: { $lt: ['$joinedCount', '$maxStudents'] } },
-        { $inc: { joinedCount: 1 } },
-        { session, new: true }
-      );
+      // Validate enrollment same as transactional path
+      let enrolled = false;
+      try {
+        if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+          enrolled = event.enrolledStudents.some(s => s && s.toString() === userId.toString());
+        }
+      } catch (e) { enrolled = false; }
 
-      if (!allocated) {
+      if (!enrolled && event.course) {
+        try {
+          const course = await Course.findById(event.course).lean();
+          if (course && Array.isArray(course.enrolledStudents)) {
+            enrolled = course.enrolledStudents.some(s => s && s.toString() === userId.toString());
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      if (!enrolled && event.course) {
+        try {
+          const enr = await Enrollment.findOne({ courseId: event.course, studentId: userId }).lean();
+          if (enr) enrolled = true;
+        } catch (e) { /* ignore */ }
+      }
+
+      if (!enrolled) {
+        const err = new Error('User not enrolled in this event/course');
+        err.statusCode = 403;
+        throw err;
+      }
+
+      // If attendance already exists and student already joined, return existing record.
+      const existing = await Attendance.findOne({ eventId, studentId: userId });
+      if (existing && existing.joinedAt) {
+        return res.status(200).json({ success: true, attendance: existing.toObject() });
+      }
+
+      // Atomic increment on Event.joinedCount with conditional check against maxStudents
+      const max = (typeof event.maxStudents === 'number') ? event.maxStudents : null;
+      const filter = { _id: eventId };
+      if (max !== null && typeof max === 'number') {
+        filter.joinedCount = { $lt: max };
+      }
+
+      const updatedEvent = await Event.findOneAndUpdate(filter, { $inc: { joinedCount: 1 } }, { new: true }).lean();
+      if (!updatedEvent && max !== null) {
         const err = new Error('Student limit has exceeded for this event.');
         err.statusCode = 409;
         throw err;
       }
 
-      // Now insert attendance record inside the same transaction. Unique index on (eventId,studentId)
-      // prevents duplicates; if insert fails, transaction will abort and joinedCount increment will rollback.
+      // Create or update attendance record. If this fails, decrement joinedCount to rollback.
       const now = new Date();
-      if (existing) {
-        await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } }).session(session);
-        const refreshed = await Attendance.findById(existing._id).session(session).lean();
-        txResult = { success: true, attendance: refreshed };
-      } else {
-        const createdArr = await Attendance.create([{ eventId, courseId: event.course || null, studentId: userId, joinedAt: now, status: 'present' }], { session });
-        txResult = { success: true, attendance: createdArr && createdArr[0] ? createdArr[0].toObject() : null };
-      }
-    });
+      try {
+        if (existing) {
+          await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } });
+          const refreshed = await Attendance.findById(existing._id).lean();
+          return res.status(200).json({ success: true, attendance: refreshed });
+        } else {
+          const user = await User.findById(userId).lean();
+          const instructorId = event.instructor || event.createdByUserId || null;
+          const attDoc = {
+            eventId,
+            courseId: event.course || null,
+            instructorId,
+            studentId: userId,
+            date: event.date || now,
+            subjectName: event.title || (event.subjectName || ''),
+            studentName: (user && (user.fullName || user.name)) || (user && user.email) || '',
+            studentEmail: (user && user.email) || '',
+            status: 'present',
+            joinedAt: now
+          };
 
-    if (txResult) return res.status(200).json(txResult);
-    if (!res.headersSent) {
-      res.status(500);
-      throw new Error('Failed to join event');
+          const created = await Attendance.create(attDoc);
+          return res.status(200).json({ success: true, attendance: created.toObject ? created.toObject() : created });
+        }
+      } catch (attErr) {
+        // Rollback joinedCount
+        try {
+          await Event.findByIdAndUpdate(eventId, { $inc: { joinedCount: -1 } });
+        } catch (rbErr) {
+          console.error('Failed to rollback joinedCount after attendance error', rbErr);
+        }
+        throw attErr;
+      }
+    } catch (err) {
+      const status = err && err.statusCode ? err.statusCode : (err && err.status ? err.status : 500);
+      if (!res.headersSent) {
+        res.status(status === 400 ? 409 : status).json({ success: false, message: err.message || 'Failed to join event' });
+      }
+      return;
     }
-  } catch (err) {
-    const status = err && err.statusCode ? err.statusCode : (err && err.status ? err.status : 500);
-    if (!res.headersSent) {
-      res.status(status === 400 ? 409 : status).json({ success: false, message: err.message || 'Failed to join event' });
-    }
-    return;
-  } finally {
-    session.endSession();
   }
 });
 
