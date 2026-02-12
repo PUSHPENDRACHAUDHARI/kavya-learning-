@@ -120,7 +120,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     endTime: "",
     endPeriod: "AM",
     location: "",
-    maxStudents: 30,
+    maxStudents: 100,
     meetLink: "",
   });
   const [instructors, setInstructors] = useState([]);
@@ -177,7 +177,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         endTime: endNorm.time24 || "",
         endPeriod: endNorm.period || "AM",
         location: eventToEdit.location || "",
-        maxStudents: eventToEdit.maxStudents || 30,
+        maxStudents: 100,
         meetLink: eventToEdit.meetLink || "",
       });
       setInstructorSearch(instrDisplay);
@@ -751,30 +751,17 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                   />
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label">Max Students</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <input
-                      type="range"
-                      min="1"
-                      max="100"
-                      name="maxStudents"
-                      value={form.maxStudents}
-                      onChange={handleChange}
-                      className="form-range"
-                      style={{ flex: 1, height: '6px', cursor: 'pointer' }}
-                    />
-                    <span style={{
-                      minWidth: '45px',
-                      padding: '6px 12px',
-                      background: '#e9ecef',
-                      borderRadius: '6px',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      textAlign: 'center',
-                      color: '#2b6cb0'
-                    }}>
-                      {form.maxStudents}
-                    </span>
+                  <label className="form-label">Student Limit</label>
+                  <div style={{
+                    padding: '10px 12px',
+                    background: '#f8f9fa',
+                    borderRadius: '6px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '15px',
+                    color: '#495057',
+                    fontWeight: '500'
+                  }}>
+                    Maximum 100 students can join this meeting.
                   </div>
                 </div>
                 <div className="col-md-6">
