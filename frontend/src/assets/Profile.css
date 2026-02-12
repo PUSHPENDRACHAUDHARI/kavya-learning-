@@ -708,7 +708,7 @@ body {
   padding-top: 15px;
 }
 
-.btn-change, .btn-cancel {
+.btn-save, .btn-cancel {
   padding: 14px 24px;
   border-radius: 6px;
   cursor: pointer;
@@ -721,7 +721,7 @@ body {
   opacity: 1 !important;
 }
 
-.btn-change {
+.btn-save {
   background-color: #28a745 !important;
   color: white !important;
 }
