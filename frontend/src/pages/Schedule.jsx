@@ -120,7 +120,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
     endTime: "",
     endPeriod: "AM",
     location: "",
-    maxStudents: 100,
+    maxStudents: 30,
     meetLink: "",
   });
   const [instructors, setInstructors] = useState([]);
@@ -177,7 +177,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
         endTime: endNorm.time24 || "",
         endPeriod: endNorm.period || "AM",
         location: eventToEdit.location || "",
-        maxStudents: eventToEdit.maxStudents || 100,
+        maxStudents: eventToEdit.maxStudents || 30,
         meetLink: eventToEdit.meetLink || "",
       });
       setInstructorSearch(instrDisplay);
@@ -316,7 +316,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
       startTime: startTimeString,
       endTime: endTimeString,
       location: form.location || '',
-      maxStudents: form.maxStudents || 100,
+      maxStudents: form.maxStudents || 30,
       meetLink: form.meetLink || null,
     };
     // If admin provided a free-text instructorName prefer that
@@ -466,7 +466,7 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
             date: newEvent.date,
             time: timeRange,
             location: newEvent.location,
-            students: `${newEvent.maxStudents || 100} students`,
+            students: `${newEvent.maxStudents || 30} students`,
             type: newEvent.type,
             status: 'Scheduled',
             _local: true,
@@ -751,10 +751,30 @@ function AddEventModal({ isOpen, onClose, onAdd, userRole, presetDate, eventToEd
                   />
                 </div>
                 <div className="col-md-6">
-                  <div style={{ padding: '12px', background: '#e3f2fd', borderRadius: '6px', borderLeft: '4px solid #1976d2' }}>
-                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '500', color: '#1565c0' }}>
-                      Maximum 100 students can join this meeting.
-                    </p>
+                  <label className="form-label">Max Students</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      name="maxStudents"
+                      value={form.maxStudents}
+                      onChange={handleChange}
+                      className="form-range"
+                      style={{ flex: 1, height: '6px', cursor: 'pointer' }}
+                    />
+                    <span style={{
+                      minWidth: '45px',
+                      padding: '6px 12px',
+                      background: '#e9ecef',
+                      borderRadius: '6px',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      textAlign: 'center',
+                      color: '#2b6cb0'
+                    }}>
+                      {form.maxStudents}
+                    </span>
                   </div>
                 </div>
                 <div className="col-md-6">
