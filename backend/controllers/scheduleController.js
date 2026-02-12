@@ -1,5 +1,7 @@
 const Schedule = require('../models/scheduleModel');
 const Event = require('../models/eventModel');
+const Course = require('../models/courseModel');
+const Enrollment = require('../models/enrollmentModel');
 
 // Get or initialize schedule for logged-in user
 exports.getSchedule = async (req, res) => {
@@ -88,7 +90,25 @@ exports.getUpcomingClasses = async (req, res) => {
         ]
       };
     } else {
-      // Students/parents: show events they're enrolled in OR events created by admin/sub-admin/instructor
+      // Students/parents: show events they're enrolled in OR events for courses they're enrolled in
+      // Also allow global events (no course) created by admin/sub-admin/instructor
+      // Compute enrolled course IDs (from Enrollment and Course.enrolledStudents)
+      const enrolledCourseIds = new Set();
+      try {
+        const fromEnroll = await Enrollment.find({ studentId: userId }).select('courseId').lean();
+        if (Array.isArray(fromEnroll) && fromEnroll.length) {
+          fromEnroll.forEach(e => { if (e && e.courseId) enrolledCourseIds.add(String(e.courseId)); });
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        const fromCourse = await Course.find({ enrolledStudents: userId }).select('_id').lean();
+        if (Array.isArray(fromCourse) && fromCourse.length) {
+          fromCourse.forEach(c => { if (c && c._id) enrolledCourseIds.add(String(c._id)); });
+        }
+      } catch (e) { /* ignore */ }
+
+      const enrolledArray = Array.from(enrolledCourseIds);
+
       query = {
         $and: [
           { date: { $gte: now } },
@@ -96,7 +116,8 @@ exports.getUpcomingClasses = async (req, res) => {
           {
             $or: [
               { enrolledStudents: userId },
-              { createdByRole: { $in: ['admin', 'sub-admin', 'instructor'] } }
+              { course: { $in: enrolledArray } },
+              { $and: [ { course: { $exists: false } }, { createdByRole: { $in: ['admin', 'sub-admin', 'instructor'] } } ] }
             ]
           }
         ]

@@ -6,6 +6,7 @@ const Course = require('../models/courseModel');
 const User = require('../models/userModel');
 const Enrollment = require('../models/enrollmentModel');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 
 // Normalize attendance record fields coming from different deployments/schemas
 function normalizeAttendanceRecord(r) {
@@ -28,76 +29,89 @@ const joinAttendance = asyncHandler(async (req, res) => {
     throw new Error('eventId is required');
   }
 
-  // Validate event exists
-  const event = await Event.findById(eventId).lean();
-  if (!event) {
-    res.status(404);
-    throw new Error('Event not found');
-  }
-
-  // Validate enrollment: event.enrolledStudents should include userId, or if course-based,
-  // check Course enrollment if available (fallback allow if not enforced)
-  let enrolled = false;
+  // Start mongoose session/transaction
+  const session = await mongoose.startSession();
   try {
-    if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
-      enrolled = event.enrolledStudents.some(s => s && s.toString() === userId.toString());
-    }
-  } catch (e) { enrolled = false; }
-
-  // If the event has a course assigned and enrollment not present on event, check Course
-  if (!enrolled && event.course) {
-    try {
-      const course = await Course.findById(event.course).lean();
-      if (course && Array.isArray(course.enrolledStudents)) {
-        enrolled = course.enrolledStudents.some(s => s && s.toString() === userId.toString());
+    let txResult = null;
+    await session.withTransaction(async () => {
+      // Load event inside transaction
+      const event = await Event.findById(eventId).session(session);
+      if (!event) {
+        res.status(404);
+        throw new Error('Event not found');
       }
-    } catch (e) { /* ignore */ }
-  }
 
-  if (!enrolled) {
-    res.status(403);
-    throw new Error('User not enrolled in this event/course');
-  }
-  // Enforce maxStudents atomically on the Event document to avoid race conditions.
-  // If student already has a joinedAt (already joined) — return success immediately.
-  const existing = await Attendance.findOne({ eventId, studentId: userId }).lean();
-  if (existing && existing.joinedAt) {
-    return res.status(200).json({ success: true, attendance: existing });
-  }
+      // Validate enrollment: prefer event.enrolledStudents, then course.enrolledStudents
+      let enrolled = false;
+      try {
+        if (Array.isArray(event.enrolledStudents) && event.enrolledStudents.length) {
+          enrolled = event.enrolledStudents.some(s => s && s.toString() === userId.toString());
+        }
+      } catch (e) { enrolled = false; }
 
-  // If event.maxStudents is set, attempt to atomically increment joinedCount only when below max
-  if (typeof event.maxStudents === 'number' && event.maxStudents >= 0) {
-    const updatedEvent = await Event.findOneAndUpdate(
-      { _id: eventId, $expr: { $lt: ["$joinedCount", "$maxStudents"] } },
-      { $inc: { joinedCount: 1 } },
-      { new: true }
-    ).lean();
+      if (!enrolled && event.course) {
+        try {
+          const course = await Course.findById(event.course).session(session).lean();
+          if (course && Array.isArray(course.enrolledStudents)) {
+            enrolled = course.enrolledStudents.some(s => s && s.toString() === userId.toString());
+          }
+        } catch (e) { /* ignore */ }
+      }
 
-    if (!updatedEvent) {
-      res.status(400);
-      throw new Error('Student limit has exceeded for this event.');
+          // Fallback: check Enrollment collection if course.enrolledStudents not populated
+          if (!enrolled && event.course) {
+            try {
+              const enr = await Enrollment.findOne({ courseId: event.course, studentId: userId }).session(session).lean();
+              if (enr) enrolled = true;
+            } catch (e) { /* ignore */ }
+          }
+
+      if (!enrolled) {
+        res.status(403);
+        throw new Error('User not enrolled in this event/course');
+      }
+
+      // Check existing attendance
+      const existing = await Attendance.findOne({ eventId, studentId: userId }).session(session);
+      if (existing && existing.joinedAt) {
+        txResult = { success: true, attendance: existing.toObject() };
+        return;
+      }
+
+      // Count currently joined students (joinedAt != null)
+      const currentCount = await Attendance.countDocuments({ eventId, joinedAt: { $ne: null } }).session(session);
+      const max = (typeof event.maxStudents === 'number') ? event.maxStudents : null;
+      if (max !== null && typeof max === 'number' && currentCount >= max) {
+        res.status(400);
+        throw new Error('Student limit has exceeded for this event.');
+      }
+
+      // Insert or update attendance record inside transaction
+      const now = new Date();
+      if (existing) {
+        await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } }).session(session);
+        const refreshed = await Attendance.findById(existing._id).session(session).lean();
+        txResult = { success: true, attendance: refreshed };
+      } else {
+        const createdArr = await Attendance.create([{ eventId, courseId: event.course || null, studentId: userId, joinedAt: now, status: 'present' }], { session });
+        txResult = { success: true, attendance: createdArr && createdArr[0] ? createdArr[0].toObject() : null };
+      }
+
+      // (Optional) update event.joinedCount for quick stats (best-effort)
+      try {
+        await Event.findByIdAndUpdate(eventId, { $set: { joinedCount: currentCount + 1 } }).session(session);
+      } catch (e) {
+        console.warn('Failed to update joinedCount in transaction', e);
+      }
+    });
+
+    if (txResult) return res.status(200).json(txResult);
+    if (!res.headersSent) {
+      res.status(500);
+      throw new Error('Failed to join event');
     }
-  }
-
-  // Create or update attendance as present. If an existing attendance doc exists but has no joinedAt,
-  // set joinedAt and status. If no document exists, create one.
-  const now = new Date();
-  try {
-    if (existing) {
-      // existing document without joinedAt: update in-place
-      await Attendance.updateOne({ _id: existing._id }, { $set: { status: 'present', joinedAt: now } });
-      const refreshed = await Attendance.findById(existing._id).lean();
-      return res.status(200).json({ success: true, attendance: refreshed });
-    }
-
-    const created = await Attendance.create({ eventId, courseId: event.course || null, studentId: userId, joinedAt: now, status: 'present' });
-    return res.status(200).json({ success: true, attendance: created });
-  } catch (err) {
-    // If we incremented joinedCount on the event but failed to create attendance, roll back the increment
-    try {
-      await Event.findByIdAndUpdate(eventId, { $inc: { joinedCount: -1 } });
-    } catch (e) { /* swallow rollback error, but log */ console.warn('Failed to rollback joinedCount', e); }
-    throw err;
+  } finally {
+    session.endSession();
   }
 });
 
