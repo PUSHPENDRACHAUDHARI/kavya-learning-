@@ -852,8 +852,8 @@ export default function Profile() {
 
       {/* Buttons */}
       <div className="form-buttons">
-        <button type="submit" className="btn-save">
-          Save Changes
+        <button type="submit" className="btn-change">
+          Change
         </button>
 
         <button
