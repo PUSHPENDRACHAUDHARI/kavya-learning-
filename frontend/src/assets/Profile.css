@@ -663,6 +663,8 @@ body {
   width: 450px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   animation: fadeIn 0.3s ease-in-out;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 /* === Edit Profile Form Styling === */
@@ -702,21 +704,37 @@ body {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 15px;
 }
 
-.btn-save, .btn-cancel {
-  background-color: #2b75b0;
-  color: white;
-  border: none;
-  padding: 10px 14px;
-  border-radius: 5px;
+.btn-change, .btn-cancel {
+  padding: 14px 24px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s ease;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  min-width: 100px;
+  display: inline-block;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-.btn-save:hover, .btn-cancel:hover {
-  background-color: #4d97d3;
+.btn-change {
+  background-color: #28a745 !important;
+  color: white !important;
+}
+
+.btn-cancel {
+  color: white !important;
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+}
+
+.btn-cancel:hover {
+  background-color: #5a6268 !important;
+  border-color: #5a6268 !important;
 }
 
 /* ✅ ✅ ✅ FINAL FIX FOR MOBILE ALIGNMENT */
