@@ -236,7 +236,13 @@ exports.listCourses = async (req, res) => {
     if (category) filter.category = category;
     if (status) filter.status = status;
     if (search) filter.$or = [{ title: new RegExp(search, 'i') }, { description: new RegExp(search, 'i') }];
-    const courses = await Course.find(filter).skip((page-1)*limit).limit(Number(limit)).sort({ createdAt: -1 });
+    
+    const courses = await Course.find(filter)
+      .populate('instructor', 'fullName email _id name')
+      .skip((page-1)*limit)
+      .limit(Number(limit))
+      .sort({ createdAt: -1 });
+    
     const total = await Course.countDocuments(filter);
     res.json({ data: courses, total });
   } catch (err) {
@@ -258,11 +264,33 @@ exports.updateCourse = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ message: 'Course not found' });
+    
+    // If instructor is being assigned, validate that the instructor exists first
+    if (req.body.instructor) {
+      const instructor = await User.findById(req.body.instructor);
+      if (!instructor) {
+        return res.status(404).json({ message: 'Instructor not found' });
+      }
+    }
+    
+    // Update course
     Object.assign(course, req.body);
-    await course.save();
-    await ActivityLog.create({ action: 'update_course', performedBy: req.user._id, targetType: 'Course', targetId: course._id, details: req.body });
-    res.json(course);
+    const updatedCourse = await course.save();
+    
+    // Log the activity
+    await ActivityLog.create({ 
+      action: 'update_course', 
+      performedBy: req.user._id, 
+      targetType: 'Course', 
+      targetId: course._id, 
+      details: req.body 
+    });
+    
+    // Return populated course with instructor details
+    const populatedCourse = await Course.findById(updatedCourse._id).populate('instructor', 'fullName email _id name');
+    res.json(populatedCourse);
   } catch (err) {
+    console.error('Update course error:', err.message);
     res.status(400).json({ message: err.message });
   }
 };
