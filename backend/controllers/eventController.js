@@ -1,6 +1,7 @@
 const Event = require('../models/eventModel');
 const asyncHandler = require('express-async-handler');
 const Course = require('../models/courseModel');
+const Enrollment = require('../models/enrollmentModel');
 const { getIo } = require('../sockets/io');
 
 // Helper: parse time string like "HH:MM" or "H:MM AM/PM" into { hh, mm }
@@ -182,25 +183,67 @@ const getEvents = asyncHandler(async (req, res) => {
         // Admins see all events (including ones created by any instructor)
         query = {};
     } else if (role === 'instructor') {
-        // Instructors see only events they created or where they are set as instructor
+        // Instructors see events they created, where they are set as instructor,
+        // and events for courses they are assigned to. Also include global admin events.
+        // Compute course IDs assigned to this instructor
+        const instructorCourseIds = new Set();
+        try {
+            const cs = await Course.find({ instructor: userId }).select('_id').lean();
+            if (Array.isArray(cs) && cs.length) cs.forEach(c => { if (c && c._id) instructorCourseIds.add(String(c._id)); });
+        } catch (e) { /* ignore */ }
+        const instructorCoursesArray = Array.from(instructorCourseIds);
+
         query = {
             $and: [
                 { deletedByRole: { $ne: 'instructor' } },
                 { $or: [
                     { instructor: userId },
-                    { createdByUserId: userId }
+                    { createdByUserId: userId },
+                    ...(instructorCoursesArray.length ? [{ course: { $in: instructorCoursesArray } }] : []),
+                    { $and: [ { course: { $exists: false } }, { createdByRole: { $in: ['admin', 'sub-admin'] } } ] }
                 ] }
             ]
         };
     } else {
-        // Students/parents: return all upcoming scheduled events that are not soft-deleted by instructors.
-        // Include events from today onwards (even if they started earlier today)
+        // Students/parents: return upcoming scheduled events but restrict instructor-created
+        // course events to only those where the student is enrolled in the event or the course.
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+
+        // Compute enrolled course IDs for this student (Enrollment and Course.enrolledStudents)
+        const enrolledCourseIds = new Set();
+        try {
+            const fromEnroll = await Enrollment.find({ studentId: userId }).select('courseId').lean();
+            if (Array.isArray(fromEnroll) && fromEnroll.length) {
+                fromEnroll.forEach(e => { if (e && e.courseId) enrolledCourseIds.add(String(e.courseId)); });
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            const fromCourse = await Course.find({ enrolledStudents: userId }).select('_id').lean();
+            if (Array.isArray(fromCourse) && fromCourse.length) {
+                fromCourse.forEach(c => { if (c && c._id) enrolledCourseIds.add(String(c._id)); });
+            }
+        } catch (e) { /* ignore */ }
+
+        const enrolledArray = Array.from(enrolledCourseIds);
+
+        // Build query: events must be scheduled, not soft-deleted by instructor, and one of:
+        // - enrolledStudents includes user
+        // - course is in student's enrolled courses
+        // - OR event has no course and was created by admin/sub-admin (global admin events)
         query = {
-            date: { $gte: today },
-            status: 'Scheduled',
-            deletedByRole: { $ne: 'instructor' }
+            $and: [
+                { date: { $gte: today } },
+                { status: 'Scheduled' },
+                { deletedByRole: { $ne: 'instructor' } },
+                {
+                    $or: [
+                        { enrolledStudents: userId },
+                        ...(enrolledArray.length ? [{ course: { $in: enrolledArray } }] : []),
+                        { $and: [ { course: { $exists: false } }, { createdByRole: { $in: ['admin', 'sub-admin'] } } ] }
+                    ]
+                }
+            ]
         };
     }
 

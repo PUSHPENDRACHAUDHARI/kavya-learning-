@@ -117,8 +117,8 @@ function AdminAttendance() {
     doc.text(`Session: ${currentEvent.title || currentEvent.name || '-'}`, margin, y); y += 6;
     doc.text(`Date: ${currentEvent.date ? new Date(currentEvent.date).toLocaleDateString() : '-'}`, margin, y); y += 6;
 
-    const headers = [['Student', 'Status', 'Joined At', 'Left At']];
-    const body = attendanceList.map(a => [a.studentName || a.student || a.studentEmail || '-', a.status || '-', a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-', a.leftAt ? new Date(a.leftAt).toLocaleString() : '-']);
+    const headers = [['Student', 'Status', 'Joined At']];
+    const body = attendanceList.map(a => [a.studentName || a.student || a.studentEmail || '-', a.status || '-', a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-']);
 
     if (doc.autoTable) {
       doc.autoTable({ startY: y, head: headers, body, margin: { left: margin, right: margin } });
@@ -271,7 +271,6 @@ function AdminAttendance() {
                           <th>Student</th>
                           <th>Status</th>
                           <th>Joined At</th>
-                          <th>Left At</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -280,7 +279,6 @@ function AdminAttendance() {
                             <td>{a.studentName || a.student || a.studentEmail || '-'}</td>
                             <td style={{ textTransform: 'capitalize' }}>{a.status || '-'}</td>
                             <td>{a.joinedAt ? new Date(a.joinedAt).toLocaleString() : '-'}</td>
-                            <td>{a.leftAt ? new Date(a.leftAt).toLocaleString() : '-'}</td>
                           </tr>
                         ))}
                       </tbody>
