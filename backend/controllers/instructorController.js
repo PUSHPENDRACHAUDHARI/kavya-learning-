@@ -448,21 +448,30 @@ exports.getStudentProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    // Verify instructor can access this student
+    // Verify instructor can access this student (defensive: support populated or id-only enrolled entries)
     const instructorCourses = await Course.find({ instructor: req.user._id });
-    const hasAccess = student.enrolledCourses.some(ec => 
-      instructorCourses.some(ic => ic._id.toString() === ec.course._id.toString())
-    );
+    const instructorCourseIds = instructorCourses.map(ic => ic._id.toString());
+
+    const enrolledArr = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
+    const hasAccess = enrolledArr.some(ec => {
+      try {
+        const courseObj = ec && ec.course ? ec.course : null;
+        const courseId = courseObj ? (courseObj._id ? courseObj._id.toString() : courseObj.toString()) : null;
+        return courseId && instructorCourseIds.includes(courseId);
+      } catch (e) {
+        return false;
+      }
+    });
 
     if (!hasAccess) {
       return res.status(403).json({ success: false, message: 'Not authorized to view this student' });
     }
 
-    // Calculate stats
-    const totalCoursesEnrolled = student.enrolledCourses.length;
-    const completedCourses = student.enrolledCourses.filter(c => c.completionPercentage === 100).length;
-    const averageProgress = student.enrolledCourses.length 
-      ? Math.round(student.enrolledCourses.reduce((sum, c) => sum + c.completionPercentage, 0) / student.enrolledCourses.length)
+    // Calculate stats defensively (handle missing/null values)
+    const totalCoursesEnrolled = enrolledArr.length;
+    const completedCourses = enrolledArr.filter(c => Number(c.completionPercentage) === 100).length;
+    const averageProgress = enrolledArr.length
+      ? Math.round(enrolledArr.reduce((sum, c) => sum + (Number(c.completionPercentage) || 0), 0) / enrolledArr.length)
       : 0;
 
     res.json({
