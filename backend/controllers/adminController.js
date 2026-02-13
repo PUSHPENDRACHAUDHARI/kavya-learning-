@@ -269,7 +269,23 @@ exports.listCourses = async (req, res) => {
     const filter = {};
     if (category) filter.category = category;
     if (status) filter.status = status;
-    if (search) filter.$or = [{ title: new RegExp(search, 'i') }, { description: new RegExp(search, 'i') }];
+    
+    // Enhanced search: search by title, description, category, and course ID
+    if (search) {
+      const s = String(search).trim();
+      const esc = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(esc, 'i');
+      const searchOr = [
+        { title: re },
+        { description: re },
+        { category: re }
+      ];
+      // Try to match course ID as well if the search looks like a MongoDB ID
+      if (/^[0-9a-f]{24}$/i.test(s)) {
+        searchOr.push({ _id: s });
+      }
+      filter.$or = searchOr;
+    }
     
     const courses = await Course.find(filter)
       .populate('instructor', 'fullName email _id name')

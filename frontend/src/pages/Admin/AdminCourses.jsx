@@ -13,15 +13,26 @@ const AdminCourses = () => {
   const [deleting, setDeleting] = useState(null);
   const [editingCourse, setEditingCourse] = useState(null);
   const [deleteError, setDeleteError] = useState('');
-  // Search state removed per request
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
+  const [totalCourses, setTotalCourses] = useState(0);
 
   const navigate = useNavigate();
 
-  const loadCourses = async () => {
+  const loadCourses = async (opts = {}) => {
     try {
-      const res = await axiosClient.get('/api/admin/courses');
+      const page = opts.page || currentPage || 1;
+      const limit = opts.limit || itemsPerPage;
+      let url = `/api/admin/courses?page=${page}&limit=${limit}`;
+      if (opts.search && String(opts.search).trim() !== '') {
+        url += `&search=${encodeURIComponent(String(opts.search).trim())}`;
+      }
+      const res = await axiosClient.get(url);
       setCourses(res.data.data || res.data);
+      setTotalCourses(res.data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
@@ -45,8 +56,8 @@ const AdminCourses = () => {
     try {
       await axiosClient.delete(`/api/admin/courses/${courseId}`);
       
-      // Remove course from local state
-      setCourses(courses.filter(c => c._id !== courseId));
+      // Reload courses with current search/filter context
+      await loadCourses({ page: 1, limit: itemsPerPage, search: searchQuery });
       
       // Show success message
       alert('Course deleted successfully!');
@@ -61,8 +72,18 @@ const AdminCourses = () => {
   };
 
   useEffect(() => {
-    loadCourses();
+    loadCourses({ page: 1, limit: itemsPerPage });
   }, []);
+
+  // When search query changes, reset to page 1 and load courses with search
+  useEffect(() => {
+    loadCourses({ page: 1, limit: itemsPerPage, search: searchQuery });
+  }, [searchQuery]);
+
+  // When page changes, load that page from server
+  useEffect(() => {
+    loadCourses({ page: currentPage, limit: itemsPerPage, search: searchQuery });
+  }, [currentPage]);
 
   const filteredCourses = useMemo(() => {
     let out = courses.filter((c) => {
@@ -73,6 +94,9 @@ const AdminCourses = () => {
     });
     return out;
   }, [courses, levelFilter]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil((totalCourses || 0) / itemsPerPage));
 
   if (loading) return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading courses...</div></AppLayout>;
 
@@ -107,7 +131,7 @@ const AdminCourses = () => {
             course={editingCourse}
             onClose={() => { setShowForm(false); setEditingCourse(null); }}
             onSuccess={() => {
-              loadCourses();
+              loadCourses({ page: 1, limit: itemsPerPage, search: searchQuery });
               setShowForm(false);
               setEditingCourse(null);
             }}
@@ -121,8 +145,24 @@ const AdminCourses = () => {
               {showForm ? "Hide Form" : "Add Course"}
             </button>
           </div>
-      {/* Search controls (title search removed per request) */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+      {/* Search controls */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {/* Search input - searches by title or description */}
+        <input
+          type="text"
+          placeholder="Search by course name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            padding: '8px 10px',
+            borderRadius: '4px',
+            border: '1px solid #ccc',
+            fontSize: '14px',
+            width: 220,
+          }}
+        />
+
+        {/* Level filter */}
         <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)} style={{ padding: 8 }}>
           <option value="all">All levels</option>
           <option value="Beginner">Beginner</option>
