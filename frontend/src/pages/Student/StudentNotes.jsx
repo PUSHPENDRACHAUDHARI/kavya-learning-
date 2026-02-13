@@ -34,6 +34,7 @@ const StudentNotes = () => {
               <li key={n._id} style={{ marginBottom: 10, color: 'var(--text)', backgroundColor: 'white', padding: '10px', borderRadius: '4px' }}>
                 <a href={n.url} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>{n.title}</a>
                 <div style={{ fontSize: 12, color: 'black' }}>{new Date(n.createdAt).toLocaleString()}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Uploaded by: {n.uploadedBy?.fullName || n.uploadedBy?.email || '-'}</div>
               </li>
             ))}
           </ul>

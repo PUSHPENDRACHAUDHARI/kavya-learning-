@@ -109,6 +109,40 @@ exports.deleteNote = async (req, res) => {
 // List notes uploaded by the requesting user (used by instructors and admins wanting to see their own notes)
 exports.listOwnNotes = async (req, res) => {
   try {
+    // Admins/sub-admins: show notes uploaded by the requesting admin only
+    const role = (req.user && (req.user.role || req.user.userRole || '')).toString().toLowerCase();
+    if (role === 'admin' || role === 'sub-admin') {
+      const notes = await Note.find({ uploadedBy: req.user._id })
+        .populate('uploadedBy', 'fullName email')
+        .populate('instructor', 'fullName email')
+        .populate('subject', 'title')
+        .sort({ createdAt: -1 });
+      return res.json({ data: notes });
+    }
+
+    // Instructors: return notes that are either explicitly assigned to this instructor,
+    // uploaded by this instructor, assigned to any of their courses, or global (no instructor and no subject).
+    if (role === 'instructor') {
+      // fetch instructor's course IDs
+      const courses = await Course.find({ instructor: req.user._id }).select('_id').lean();
+      const courseIds = courses.map(c => c._id).filter(Boolean);
+
+      const orConditions = [];
+      orConditions.push({ instructor: req.user._id });
+      orConditions.push({ uploadedBy: req.user._id });
+      if (courseIds.length) orConditions.push({ subject: { $in: courseIds } });
+      // global notes (visible to everyone)
+      orConditions.push({ instructor: null, subject: null });
+
+      const notes = await Note.find({ $or: orConditions })
+        .populate('uploadedBy', 'fullName email')
+        .populate('instructor', 'fullName email')
+        .populate('subject', 'title')
+        .sort({ createdAt: -1 });
+      return res.json({ data: notes });
+    }
+
+    // Fallback: for other roles, return only notes uploaded by the user
     const notes = await Note.find({ uploadedBy: req.user._id })
       .populate('uploadedBy', 'fullName email')
       .populate('instructor', 'fullName email')
