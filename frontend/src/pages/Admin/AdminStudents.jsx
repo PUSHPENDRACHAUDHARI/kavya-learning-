@@ -17,8 +17,8 @@ const AdminStudents = () => {
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMessage, setModalMessage] = useState(null);
-  // Search & sort state (name search removed)
-  
+  // Search & sort state
+  const [searchQuery, setSearchQuery] = useState("");
   const [cityQuery, setCityQuery] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
   const [nameSort, setNameSort] = useState("none"); // none | asc | desc
@@ -81,6 +81,11 @@ const AdminStudents = () => {
       loadStudents({ page: 1, limit: pageSize, sortBy: 'fullName', sortOrder: nameSort });
     }
   }, [nameSort]);
+
+  // When search query changes, reset to page 1 and load students with search
+  useEffect(() => {
+    loadStudents({ page: 1, limit: pageSize, search: searchQuery });
+  }, [searchQuery]);
 
   // compute filtered and sorted students with stable hook order
   const filteredStudents = useMemo(() => {
@@ -197,8 +202,21 @@ const AdminStudents = () => {
       </div>
 
       {/* SEARCH & FILTER CONTROLS */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-              {/* name search removed per request */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Main search bar - searches by name, email, firstName, lastName */}
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ 
+              padding: 8, 
+              width: 220,
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '14px'
+            }}
+          />
 
           <input
             type="text"

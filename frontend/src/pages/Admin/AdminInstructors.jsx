@@ -9,10 +9,12 @@ const AdminInstructors = () => {
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  // name/email search removed per request
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [totalInstructors, setTotalInstructors] = useState(0);
   const [deleteLoading, setDeleteLoading] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
@@ -21,11 +23,21 @@ const AdminInstructors = () => {
   const [assignInstructorId, setAssignInstructorId] = useState(null);
   const [openAssignedFor, setOpenAssignedFor] = useState(null);
 
-  const loadInstructors = async () => {
+  const loadInstructors = async (opts = {}) => {
     try {
       setLoading(true);
-      const res = await axiosClient.get("/api/admin/instructors");
+      const page = opts.page || currentPage || 1;
+      const limit = opts.limit || itemsPerPage;
+      let url = `/api/admin/instructors?page=${page}&limit=${limit}`;
+      if (opts.search && String(opts.search).trim() !== '') {
+        url += `&search=${encodeURIComponent(String(opts.search).trim())}`;
+      }
+      if (opts.status && opts.status !== 'all') {
+        url += `&status=${encodeURIComponent(String(opts.status))}`;
+      }
+      const res = await axiosClient.get(url);
       setInstructors(res.data.data || res.data);
+      setTotalInstructors(res.data.total || 0);
     } catch (err) {
       console.error("Failed loading instructors", err);
     } finally {
@@ -34,9 +46,19 @@ const AdminInstructors = () => {
   };
 
   useEffect(() => {
-    loadInstructors();
+    loadInstructors({ page: 1, limit: itemsPerPage });
     loadCourses();
   }, []);
+
+  // When search query changes, reset to page 1 and load instructors with search
+  useEffect(() => {
+    loadInstructors({ page: 1, limit: itemsPerPage, search: searchQuery, status: statusFilter });
+  }, [searchQuery]);
+
+  // When status filter changes, reset to page 1 and reload
+  useEffect(() => {
+    loadInstructors({ page: 1, limit: itemsPerPage, search: searchQuery, status: statusFilter });
+  }, [statusFilter]);
 
   const loadCourses = async () => {
     try {
@@ -51,27 +73,19 @@ const AdminInstructors = () => {
     }
   };
 
-  // Filter and search instructors
+  // Filter and search instructors (now handled server-side)
   const filteredInstructors = useMemo(() => {
-    let out = instructors.filter((i) => {
-      if (statusFilter !== "all") {
-        const status = i.status || "active";
-        if (statusFilter === "active" && status !== "active") return false;
-        if (statusFilter === "blocked" && status !== "blocked") return false;
-      }
-      return true;
-    });
+    return instructors;
+  }, [instructors]);
 
-    return out;
-  }, [instructors, statusFilter]);
+  // Pagination (using backend-provided totals)
+  const totalPages = Math.max(1, Math.ceil((totalInstructors || 0) / itemsPerPage));
+  const paginatedInstructors = filteredInstructors;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredInstructors.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedInstructors = filteredInstructors.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
+  // When page changes, load that page from server
+  useEffect(() => {
+    loadInstructors({ page: currentPage, limit: itemsPerPage, search: searchQuery, status: statusFilter });
+  }, [currentPage]);
 
   // Handle block/unblock
   const handleBlockUnblock = async (instructorId, action) => {
@@ -81,7 +95,7 @@ const AdminInstructors = () => {
           ? `/api/admin/users/${instructorId}/block`
           : `/api/admin/users/${instructorId}/unblock`;
       await axiosClient.put(endpoint);
-      await loadInstructors();
+      await loadInstructors({ page: currentPage, limit: itemsPerPage, search: searchQuery, status: statusFilter });
     } catch (err) {
       alert(err?.response?.data?.message || `Failed to ${action} instructor`);
     }
@@ -96,7 +110,7 @@ const AdminInstructors = () => {
     try {
       setDeleteLoading(instructorId);
       await axiosClient.delete(`/api/admin/instructors/${instructorId}`);
-      await loadInstructors();
+      await loadInstructors({ page: currentPage, limit: itemsPerPage, search: searchQuery, status: statusFilter });
       alert('Instructor deleted successfully');
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to delete instructor');
@@ -106,7 +120,7 @@ const AdminInstructors = () => {
   };
 
   const handleFormSuccess = () => {
-    loadInstructors();
+    loadInstructors({ page: 1, limit: itemsPerPage, search: searchQuery, status: statusFilter });
   };
 
   const openAssignModal = (instructorId) => {
@@ -125,7 +139,7 @@ const AdminInstructors = () => {
       setRemovingCourseId(courseId);
       await axiosClient.put(`/api/admin/courses/${courseId}/unassign`);
       await loadCourses();
-      await loadInstructors();
+      await loadInstructors({ page: currentPage, limit: itemsPerPage, search: searchQuery, status: statusFilter });
       alert('Course unassigned');
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to remove assignment');
@@ -186,13 +200,29 @@ const AdminInstructors = () => {
         {/* SEARCH & FILTER */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            display: "flex",
             gap: "15px",
             marginBottom: 20,
+            alignItems: "center",
+            flexWrap: "wrap",
           }}
         >
-          {/* name/email search removed per request */}
+          {/* Search bar - searches by name or email */}
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              padding: "10px",
+              borderRadius: "4px",
+              border: "1px solid #ccc",
+              fontSize: "14px",
+              width: 220,
+            }}
+          />
+
+          {/* Status filter */}
           <select
             value={statusFilter}
             onChange={(e) => {
@@ -205,6 +235,7 @@ const AdminInstructors = () => {
               borderRadius: "4px",
               border: "1px solid #ccc",
               fontSize: "14px",
+              width: 200,
             }}
           >
             <option value="all">All Status</option>
@@ -486,7 +517,7 @@ const AdminInstructors = () => {
         onAssigned={async () => {
           // refresh courses and instructors after assignment
           await loadCourses();
-          await loadInstructors();
+          await loadInstructors({ page: 1, limit: itemsPerPage, search: searchQuery, status: statusFilter });
         }}
       />
     </AppLayout>
