@@ -113,7 +113,7 @@ form .btn-primary {
   pointer-events: auto !important;
   height: auto !important;
   min-height: 40px !important;
-  width: 100% !important;
+  width: 10% !important;
 }
 
 form .btn-primary:disabled {

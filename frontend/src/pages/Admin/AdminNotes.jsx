@@ -92,18 +92,22 @@ const AdminNotes = () => {
     <AppLayout showGreeting={false}>
       <div style={{ marginBottom: 20 }}>
         <h2>Notes</h2>
-        <form onSubmit={handleUpload} style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
-          <input type="text" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)}>
-            <option value="">Select Instructor (optional)</option>
-            {instructors.map(i => <option key={i._id} value={i._id}>{i.fullName || i.email}</option>)}
-          </select>
-          <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
-            <option value="">Select Subject (optional)</option>
-            {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
-          </select>
-          <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setFile(e.target.files[0])} />
-          <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</button>
+        <form onSubmit={handleUpload} style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input type="text" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)}>
+              <option value="">Select Instructor (optional)</option>
+              {instructors.map(i => <option key={i._id} value={i._id}>{i.fullName || i.email}</option>)}
+            </select>
+            <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
+              <option value="">Select Subject (optional)</option>
+              {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
+            </select>
+            <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setFile(e.target.files[0])} />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</button>
+          </div>
         </form>
       </div>
 
