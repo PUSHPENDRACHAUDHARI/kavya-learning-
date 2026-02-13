@@ -131,7 +131,9 @@ const InstructorStudents = () => {
                   <tr key={student._id} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '12px' }}><strong>{student.fullName}</strong></td>
                     <td style={{ padding: '12px' }}>{student.email}</td>
-                    <td style={{ padding: '12px' }}>{student.enrolledInCourseCount || 0}</td>
+                    <td style={{ padding: '12px' }}>
+                      {typeof student.totalCoursesEnrolled === 'number' ? student.totalCoursesEnrolled : (student.enrolledInCourseCount || (student.courses && student.courses.length) || 0)}
+                    </td>
                     <td style={{ padding: '12px' }}>
                       <span style={{
                         padding: '4px 8px',
