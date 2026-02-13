@@ -23,15 +23,22 @@ const AdminStudents = () => {
   const [genderFilter, setGenderFilter] = useState("all");
   const [nameSort, setNameSort] = useState("none"); // none | asc | desc
 
+  const [totalStudents, setTotalStudents] = useState(0);
+
   const loadStudents = async (opts = {}) => {
     try {
-      let url = "/api/admin/users?role=student";
+      const page = opts.page || currentPage || 1;
+      const limit = opts.limit || pageSize;
+      let url = `/api/admin/users?role=student&page=${page}&limit=${limit}`;
       if (opts.sortBy) url += `&sortBy=${encodeURIComponent(opts.sortBy)}`;
       if (opts.sortOrder) url += `&sortOrder=${encodeURIComponent(opts.sortOrder)}`;
+      if (opts.search && String(opts.search).trim() !== '') url += `&search=${encodeURIComponent(String(opts.search).trim())}`;
       const res = await axiosClient.get(url);
 
-      // Expect backend to send enrolledCourses & achievements
-      setStudents(res.data.data || res.data);
+      // Expect backend to send { data, total }
+      const data = res.data.data || res.data;
+      setStudents(data || []);
+      setTotalStudents(res.data.total || 0);
       // after setting students, kick off course prefetch for enrolled course ids
       try {
         const payload = res.data.data || res.data || [];
@@ -63,28 +70,24 @@ const AdminStudents = () => {
   };
 
   useEffect(() => {
-    loadStudents();
+    loadStudents({ page: 1, limit: pageSize });
   }, []);
 
-  // When sort order changes, request sorted data from backend (also handled client-side)
+  // When sort order changes, request sorted data from backend
   useEffect(() => {
     if (!nameSort || nameSort === 'none') {
-      // reload default ordering
-      loadStudents();
+      loadStudents({ page: 1, limit: pageSize });
     } else {
-      loadStudents({ sortBy: 'fullName', sortOrder: nameSort });
+      loadStudents({ page: 1, limit: pageSize, sortBy: 'fullName', sortOrder: nameSort });
     }
   }, [nameSort]);
 
   // compute filtered and sorted students with stable hook order
   const filteredStudents = useMemo(() => {
-    let out = students.filter((s) => {
-      const name = (s.fullName || "").toLowerCase();
-      const q = (searchQuery || "").toLowerCase().trim();
+    let out = (students || []).filter((s) => {
       const qCity = (cityQuery || "").toLowerCase().trim();
 
-      if (q && !name.includes(q)) return false;
-
+      // Note: name search is performed server-side via `searchQuery`.
       if (qCity) {
         // derive a normalized city value from address whether it's an object or string
         let addressStr = '';
@@ -128,13 +131,23 @@ const AdminStudents = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
 
-  // Reset to first page when filters/results change
+  // When page changes, load that page from server
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filteredStudents.length, searchQuery, cityQuery, genderFilter, nameSort]);
+    loadStudents({ page: currentPage, limit: pageSize, search: searchQuery, sortBy: nameSort === 'none' ? undefined : 'fullName', sortOrder: nameSort === 'none' ? undefined : nameSort });
+  }, [currentPage]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
-  const pagedStudents = filteredStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Debounce search input and query server
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setCurrentPage(1);
+      loadStudents({ page: 1, limit: pageSize, search: searchQuery, sortBy: nameSort === 'none' ? undefined : 'fullName', sortOrder: nameSort === 'none' ? undefined : nameSort });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // server-driven pagination
+  const totalPages = Math.max(1, Math.ceil((totalStudents || 0) / pageSize));
+  const pagedStudents = filteredStudents; // filteredStudents represents the current page from server (with city/gender client filters applied)
 
   if (loading) return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading students...</div></AppLayout>;
 
@@ -193,13 +206,13 @@ const AdminStudents = () => {
 
       {/* SEARCH & FILTER CONTROLS */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-        <input
-          type="text"
-          placeholder="Search student by name..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ padding: 8, width: 280 }}
-        />
+              <input
+                type="text"
+                placeholder="Search student by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ padding: 8, width: 280 }}
+              />
 
           <input
             type="text"

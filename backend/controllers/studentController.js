@@ -206,6 +206,77 @@ exports.getDashboardFeed = async (req, res) => {
   }
 };
 
+// @desc    Get marquee items: only upcoming events and upcoming reminders for logged-in student
+// @route   GET /api/student/dashboard-marquee
+// @access  Private/Student
+exports.getDashboardMarquee = async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 5;
+    const now = new Date();
+
+    // Load student's enrolled course ids
+    const student = await User.findById(req.user._id).select('enrolledCourses').populate({ path: 'enrolledCourses.course', select: '_id' });
+    const enrolledCourseIds = (student.enrolledCourses || []).map(ec => ec.course && ec.course._id).filter(Boolean);
+
+    // Build event query: only future scheduled events relevant to student
+    const eventFilter = {
+      status: 'Scheduled',
+      date: { $gte: now },
+      deletedByRole: { $ne: 'instructor' },
+      $or: [
+        { enrolledStudents: req.user._id },
+        ...(enrolledCourseIds.length ? [{ course: { $in: enrolledCourseIds } }] : []),
+        { $and: [ { course: { $exists: false } }, { createdByRole: { $in: ['admin', 'sub-admin'] } } ] }
+      ]
+    };
+
+    const Event = require('../models/eventModel');
+    const Notification = require('../models/notificationModel');
+
+    const [events, notifications] = await Promise.all([
+      Event.find(eventFilter).populate('instructor', 'fullName').sort({ date: 1 }).limit(limit),
+      Notification.find({ userId: req.user._id, type: 'reminder' }).sort({ createdAt: -1 }).limit(50)
+    ]);
+
+    // Filter notifications to only those with future eventDate (parseable)
+    const futureReminders = (notifications || []).filter(n => {
+      try {
+        if (!n.eventDate) return false;
+        const parsed = new Date(n.eventDate);
+        if (isNaN(parsed)) return false;
+        return parsed >= now;
+      } catch (e) { return false; }
+    }).map(n => ({
+      id: n._id,
+      source: 'reminder',
+      title: n.title || n.eventTitle || 'Reminder',
+      date: n.eventDate,
+      sortDate: new Date(n.eventDate),
+      raw: n
+    }));
+
+    const eventItems = (events || []).map(ev => ({
+      id: ev._id,
+      source: 'event',
+      title: ev.title,
+      date: ev.date,
+      startTime: ev.startTime,
+      endTime: ev.endTime,
+      instructor: ev.instructor ? ev.instructor.fullName : null,
+      sortDate: ev.date || ev.createdAt,
+      raw: ev
+    }));
+
+    // Combine and sort ascending (soonest first) and limit
+    const combined = [...eventItems, ...futureReminders].sort((a, b) => new Date(a.sortDate) - new Date(b.sortDate)).slice(0, limit);
+
+    res.json({ success: true, count: combined.length, data: combined });
+  } catch (error) {
+    console.error('Error building dashboard marquee:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get student's courses
 // @route   GET /api/student/courses
 // @access  Private/Student

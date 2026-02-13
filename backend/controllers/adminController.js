@@ -55,9 +55,43 @@ exports.listUsers = async (req, res) => {
   try {
     const { role, search, page = 1, limit = 20, status, sortBy, sortOrder } = req.query;
     const filter = {};
-    if (role) filter.role = role;
+
+    // role: support case-insensitive matching across common fields
+    if (role) {
+      const r = String(role).trim();
+      // match role, userRole, or type fields case-insensitively
+      filter.$or = [
+        { role: new RegExp(`^${r}$`, 'i') },
+        { userRole: new RegExp(`^${r}$`, 'i') },
+        { type: new RegExp(`^${r}$`, 'i') }
+      ];
+    }
+
     if (status) filter.status = status;
-    if (search) filter.$or = [{ fullName: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
+
+    // search: trim and perform case-insensitive partial match against multiple name fields and email
+    if (typeof search === 'string' && search.trim() !== '') {
+      const s = search.trim();
+      // escape regex special chars to avoid unintended patterns
+      const esc = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(esc, 'i');
+      const searchOr = [
+        { fullName: re },
+        { firstName: re },
+        { lastName: re },
+        { email: re }
+      ];
+
+      // combine with existing filter.$or (role) if present: use $and to ensure both constraints
+      if (filter.$or && Array.isArray(filter.$or)) {
+        // role filter stored in filter.$or; replace with $and of role OR and search OR
+        const roleOr = filter.$or;
+        delete filter.$or;
+        filter.$and = [ { $or: roleOr }, { $or: searchOr } ];
+      } else {
+        filter.$or = searchOr;
+      }
+    }
 
     // Build sort object: default to createdAt desc
     let sortObj = { createdAt: -1 };

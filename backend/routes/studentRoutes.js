@@ -3,6 +3,7 @@ const { protect, authorize } = require('../middleware/authMiddleware');
 const {
   getStudentDashboard,
   getDashboardFeed,
+  getDashboardMarquee,
   getStudentCourses,
   getStudentCourse,
   getEnrolledCourses,
@@ -23,6 +24,7 @@ router.use(protect, authorize('student'));
 // Dashboard
 router.get('/dashboard', getStudentDashboard);
 router.get('/dashboard-feed', getDashboardFeed);
+router.get('/dashboard-marquee', getDashboardMarquee);
 
 // Profile
 router.get('/profile', getStudentProfile);

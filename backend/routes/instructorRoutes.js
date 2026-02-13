@@ -47,4 +47,11 @@ router.put('/students/:studentId', updateStudentStatus);
 router.delete('/students/:studentId', removeStudentFromInstructor);
 router.get('/students/:studentId/progress/:courseId', getStudentCourseProgress);
 
+// Notes (Instructor) - allow instructors to upload/list/delete notes (only their own)
+const { uploadFiles } = require('../middleware/multer');
+const noteController = require('../controllers/noteController');
+router.post('/notes', uploadFiles.single('file'), noteController.uploadNote);
+router.get('/notes', noteController.listOwnNotes);
+router.delete('/notes/:id', noteController.deleteNote);
+
 module.exports = router;
