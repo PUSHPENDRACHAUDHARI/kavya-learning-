@@ -373,6 +373,45 @@ function Dashboard() {
     
   }, []);
 
+  // Keep Top Performers in sync with the Leaderboard page by polling the same API
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTopPerformers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/achievements/leaderboard', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : undefined
+          }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (Array.isArray(data.leaderboard) ? data.leaderboard : []);
+
+        const topThree = list.slice(0, 3).map((entry, index) => ({
+          rank: entry.rank || index + 1,
+          userId: entry._id && entry._id._id ? String(entry._id._id) : (entry.userId || (entry._id && String(entry._id)) || null),
+          name: (entry._id && (entry._id.fullName || entry._id.name || entry._id.email)) || entry.name || `Student ${index + 1}`,
+          totalPoints: entry.totalPoints || 0
+        }));
+
+        if (!mounted) return;
+        setLeaderboard(topThree);
+      } catch (err) {
+        console.warn('Failed to load top performers for dashboard:', err);
+      }
+    };
+
+    loadTopPerformers();
+    const id = setInterval(loadTopPerformers, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
   // Poll achievements every 30 seconds so students see real-time achievement updates
   useEffect(() => {
     let mounted = true;
