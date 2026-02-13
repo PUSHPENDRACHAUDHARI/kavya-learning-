@@ -5,6 +5,10 @@ import AppLayout from '../../components/AppLayout';
 const AdminNotes = () => {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [instructors, setInstructors] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedInstructor, setSelectedInstructor] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -22,8 +26,22 @@ const AdminNotes = () => {
     }
   };
 
+  const loadInstructorsAndCourses = async () => {
+    try {
+      const [instrRes, coursesRes] = await Promise.all([
+        axiosClient.get('/api/admin/instructors'),
+        axiosClient.get('/api/admin/courses')
+      ]);
+      setInstructors(instrRes.data.data || []);
+      setCourses(coursesRes.data.data || []);
+    } catch (err) {
+      console.error('Failed to load instructors/courses', err);
+    }
+  };
+
   useEffect(() => {
     loadNotes();
+    loadInstructorsAndCourses();
   }, []);
 
   const handleUpload = async (e) => {
@@ -32,6 +50,8 @@ const AdminNotes = () => {
     const formData = new FormData();
     formData.append('file', file);
     if (title) formData.append('title', title);
+    if (selectedInstructor) formData.append('instructorId', selectedInstructor);
+    if (selectedSubject) formData.append('subjectId', selectedSubject);
 
     setUploading(true);
     try {
@@ -74,6 +94,14 @@ const AdminNotes = () => {
         <h2>Notes</h2>
         <form onSubmit={handleUpload} style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
           <input type="text" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <select value={selectedInstructor} onChange={(e) => setSelectedInstructor(e.target.value)}>
+            <option value="">Select Instructor (optional)</option>
+            {instructors.map(i => <option key={i._id} value={i._id}>{i.fullName || i.email}</option>)}
+          </select>
+          <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
+            <option value="">Select Subject (optional)</option>
+            {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
+          </select>
           <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setFile(e.target.files[0])} />
           <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</button>
         </form>
