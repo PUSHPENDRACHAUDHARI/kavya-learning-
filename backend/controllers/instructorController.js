@@ -404,23 +404,50 @@ exports.getInstructorStudents = async (req, res) => {
     const courses = await Course.find({ instructor: req.user._id })
       .populate('enrolledStudents', 'fullName email');
 
-    // Extract unique students
+    // Extract unique students and include which of the instructor's courses each student is enrolled in
     const studentSet = new Set();
     const students = [];
 
     courses.forEach(course => {
       course.enrolledStudents?.forEach(student => {
-        if (!studentSet.has(student._id.toString())) {
-          studentSet.add(student._id.toString());
-          students.push({
+        const sid = student._id.toString();
+        // find or initialize existing student entry
+        let entry = students.find(s => String(s._id) === sid);
+        if (!entry) {
+          entry = {
             ...student.toObject(),
-            enrolledInCourseCount: courses.filter(c => 
-              c.enrolledStudents.some(s => s._id.toString() === student._id.toString())
-            ).length
-          });
+            // `courses` will hold only the courses (id + title) from THIS instructor that the student is enrolled in
+            courses: []
+          };
+          students.push(entry);
+        }
+        // append this course to the student's courses list if not already present
+        if (!entry.courses.some(c => String(c._id) === String(course._id))) {
+          entry.courses.push({ _id: course._id, title: course.title });
         }
       });
     });
+
+    // Attach a compact count derived from the courses array for compatibility
+    students.forEach(s => {
+      s.enrolledInCourseCount = (s.courses || []).length;
+    });
+
+    // Also fetch each student's total enrolled courses across the platform
+    try {
+      const studentIds = students.map(s => s._id);
+      const users = await User.find({ _id: { $in: studentIds } }).select('enrolledCourses').lean();
+      const enrolledCountMap = {};
+      users.forEach(u => {
+        enrolledCountMap[String(u._id)] = (u.enrolledCourses || []).length;
+      });
+      students.forEach(s => {
+        s.totalCoursesEnrolled = enrolledCountMap[String(s._id)] || 0;
+      });
+    } catch (e) {
+      // if this fails, keep going without totalCoursesEnrolled
+      console.warn('Could not compute totalCoursesEnrolled for students', e);
+    }
 
     res.json({
       success: true,
