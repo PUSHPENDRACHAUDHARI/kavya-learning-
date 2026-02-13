@@ -32,12 +32,20 @@ const InstructorStudents = () => {
   };
 
   const handleViewStudent = async (studentId) => {
+    // Ensure correct id passed and reset previous state
+    if (!studentId) return;
+    setSelectedStudent(studentId);
+    setStudentDetails(null);
+    setStudentError(null);
+    setStudentLoading(true);
     try {
       const res = await axiosClient.get(`/api/instructor/students/${studentId}`);
-      setSelectedStudent(studentId);
-      setStudentDetails(res.data.data);
+      setStudentDetails(res.data.data || null);
     } catch (error) {
       console.error('Failed to load student details:', error);
+      setStudentError(error?.response?.data?.message || error.message || 'Failed to load student details');
+    } finally {
+      setStudentLoading(false);
     }
   };
 
@@ -116,7 +124,13 @@ const InstructorStudents = () => {
                     <td style={{ padding: '12px' }}><strong>{student.fullName}</strong></td>
                     <td style={{ padding: '12px' }}>{student.email}</td>
                     <td style={{ padding: '12px' }}>
-                      {typeof student.totalCoursesEnrolled === 'number' ? student.totalCoursesEnrolled : (student.enrolledInCourseCount || (student.courses && student.courses.length) || 0)}
+                      {(
+                        // Prefer authoritative stats if available
+                        (student.stats && typeof student.stats.totalCoursesEnrolled === 'number')
+                          ? student.stats.totalCoursesEnrolled
+                          // Otherwise derive from enrolledCourses array when present
+                          : (Array.isArray(student.enrolledCourses) ? student.enrolledCourses.length : (student.enrolledInCourseCount || 0))
+                      )}
                     </td>
                     <td style={{ padding: '12px' }}>
                       <span style={{
@@ -167,7 +181,7 @@ const InstructorStudents = () => {
         </div>
 
         {/* Student Details Modal */}
-        {selectedStudent && studentDetails && (
+        {selectedStudent && (
           <div style={{
             position: 'fixed',
             top: 0,
@@ -204,78 +218,88 @@ const InstructorStudents = () => {
                 </button>
               </div>
 
-              {/* Personal Info */}
-              <div style={{ marginBottom: '20px' }}>
-                <h4>Personal Information</h4>
-                <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px' }}>
-                  <p><strong>Name:</strong> {studentDetails.fullName}</p>
-                  <p><strong>Email:</strong> {studentDetails.email}</p>
-                  <p><strong>Phone:</strong> {studentDetails.phone || 'N/A'}</p>
-                  <p><strong>Status:</strong> {studentDetails.status}</p>
-                  <p><strong>Enrollment Date:</strong> {new Date(studentDetails.enrollmentDate).toLocaleDateString()}</p>
-                </div>
-              </div>
+              <div style={{ paddingBottom: 10 }}>
+                {studentLoading && <div style={{ padding: 20 }}>Loading student details...</div>}
+                {studentError && <div style={{ padding: 20, color: 'red' }}>Error: {studentError}</div>}
+                {!studentLoading && !studentError && !studentDetails && <div style={{ padding: 20 }}>No details available for this student.</div>}
 
-              {/* Stats */}
-              <div style={{ marginBottom: '20px' }}>
-                <h4>Statistics</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                  <div style={{ background: '#d4edda', padding: '15px', borderRadius: '8px' }}>
-                    <p><strong>Total Courses:</strong> {studentDetails.stats.totalCoursesEnrolled}</p>
-                  </div>
-                  <div style={{ background: '#d1ecf1', padding: '15px', borderRadius: '8px' }}>
-                    <p><strong>Completed:</strong> {studentDetails.stats.completedCourses}</p>
-                  </div>
-                  <div style={{ background: '#fff3cd', padding: '15px', borderRadius: '8px' }}>
-                    <p><strong>Average Progress:</strong> {studentDetails.stats.averageProgress}%</p>
-                  </div>
-                  <div style={{ background: '#e2e3e5', padding: '15px', borderRadius: '8px' }}>
-                    <p><strong>Total Hours:</strong> {studentDetails.totalHoursLearned}h</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Enrolled Courses */}
-              <div style={{ marginBottom: '20px' }}>
-                <h4>Enrolled Courses</h4>
-                {studentDetails.enrolledCourses.length === 0 ? (
-                  <p>No courses enrolled</p>
-                ) : (
+                {!studentLoading && !studentError && studentDetails && (
                   <div>
-                    {studentDetails.enrolledCourses.map((ec, idx) => (
-                      <div key={idx} style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '10px' }}>
-                        <p><strong>{ec.course.title}</strong></p>
-                        <p>Progress: {ec.completionPercentage}%</p>
-                        <div style={{ background: '#e9ecef', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
-                          <div style={{ background: '#2b6cb0', height: '100%', width: `${ec.completionPercentage}%` }}></div>
-                        </div>
-                        <p style={{ fontSize: '12px', marginTop: '8px', color: '#666' }}>
-                          Hours Spent: {ec.hoursSpent} | Lessons: {ec.completedLessons?.length || 0}
-                        </p>
+                    {/* Personal Info */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <h4>Personal Information</h4>
+                      <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px' }}>
+                        <p><strong>Name:</strong> {studentDetails.fullName || '—'}</p>
+                        <p><strong>Email:</strong> {studentDetails.email || '—'}</p>
+                        <p><strong>Phone:</strong> {studentDetails.phone || 'N/A'}</p>
+                        <p><strong>Status:</strong> {studentDetails.status || '—'}</p>
+                        <p><strong>Enrollment Date:</strong> {studentDetails.enrollmentDate ? new Date(studentDetails.enrollmentDate).toLocaleDateString() : '—'}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
 
-              {/* Achievements */}
-              <div>
-                <h4>Achievements</h4>
-                {studentDetails.achievements.length === 0 ? (
-                  <p>No achievements yet</p>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
-                    {studentDetails.achievements.map((achievement, idx) => (
-                      <div key={idx} style={{
-                        background: '#fff3cd',
-                        padding: '10px',
-                        borderRadius: '8px',
-                        textAlign: 'center'
-                      }}>
-                        <p style={{ marginBottom: '5px' }}>🏅</p>
-                        <p style={{ fontSize: '12px' }}>{achievement.title}</p>
+                    {/* Stats */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <h4>Statistics</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                        <div style={{ background: '#d4edda', padding: '15px', borderRadius: '8px' }}>
+                          <p><strong>Total Courses:</strong> {studentDetails.stats?.totalCoursesEnrolled ?? 0}</p>
+                        </div>
+                        <div style={{ background: '#d1ecf1', padding: '15px', borderRadius: '8px' }}>
+                          <p><strong>Completed:</strong> {studentDetails.stats?.completedCourses ?? 0}</p>
+                        </div>
+                        <div style={{ background: '#fff3cd', padding: '15px', borderRadius: '8px' }}>
+                          <p><strong>Average Progress:</strong> {studentDetails.stats?.averageProgress ?? 0}%</p>
+                        </div>
+                        <div style={{ background: '#e2e3e5', padding: '15px', borderRadius: '8px' }}>
+                          <p><strong>Total Hours:</strong> {studentDetails.totalHoursLearned ?? 0}h</p>
+                        </div>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Enrolled Courses */}
+                    <div style={{ marginBottom: '20px' }}>
+                      <h4>Enrolled Courses</h4>
+                      {(studentDetails.enrolledCourses && studentDetails.enrolledCourses.length > 0) ? (
+                        <div>
+                          {studentDetails.enrolledCourses.map((ec, idx) => (
+                            <div key={idx} style={{ background: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '10px' }}>
+                              <p><strong>{(ec.course && ec.course.title) || 'Unknown Course'}</strong></p>
+                              <p>Progress: {Number(ec.completionPercentage) || 0}%</p>
+                              <div style={{ background: '#e9ecef', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                                <div style={{ background: '#2b6cb0', height: '100%', width: `${Number(ec.completionPercentage) || 0}%` }}></div>
+                              </div>
+                              <p style={{ fontSize: '12px', marginTop: '8px', color: '#666' }}>
+                                Hours Spent: {ec.hoursSpent ?? 0} | Lessons: {ec.completedLessons?.length || 0}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>No courses enrolled</p>
+                      )}
+                    </div>
+
+                    {/* Achievements */}
+                    <div>
+                      <h4>Achievements</h4>
+                      {(studentDetails.achievements && studentDetails.achievements.length > 0) ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
+                          {studentDetails.achievements.map((achievement, idx) => (
+                            <div key={idx} style={{
+                              background: '#fff3cd',
+                              padding: '10px',
+                              borderRadius: '8px',
+                              textAlign: 'center'
+                            }}>
+                              <p style={{ marginBottom: '5px' }}>🏅</p>
+                              <p style={{ fontSize: '12px' }}>{achievement.title}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p>No achievements yet</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
