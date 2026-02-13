@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FaTrash } from 'react-icons/fa';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
 
@@ -7,6 +8,8 @@ const InstructorNotes = () => {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState('');
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(null);
 
@@ -22,8 +25,18 @@ const InstructorNotes = () => {
     }
   };
 
+  const loadCourses = async () => {
+    try {
+      const res = await axiosClient.get('/api/instructor/courses');
+      setCourses(res.data.data || []);
+    } catch (err) {
+      console.error('Failed to load courses', err);
+    }
+  };
+
   useEffect(() => {
     loadNotes();
+    loadCourses();
   }, []);
 
   const handleUpload = async (e) => {
@@ -32,6 +45,8 @@ const InstructorNotes = () => {
     const formData = new FormData();
     formData.append('file', file);
     if (title) formData.append('title', title);
+    if (!selectedCourse) return alert('Please select a course/subject for this note');
+    formData.append('subjectId', selectedCourse);
 
     setUploading(true);
     try {
@@ -74,6 +89,10 @@ const InstructorNotes = () => {
         <h2>Notes</h2>
         <form onSubmit={handleUpload} style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
           <input type="text" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <select value={selectedCourse} onChange={(e) => setSelectedCourse(e.target.value)}>
+            <option value="">Select Course/Subject</option>
+            {courses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
+          </select>
           <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(e) => setFile(e.target.files[0])} />
           <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</button>
         </form>
@@ -99,7 +118,7 @@ const InstructorNotes = () => {
               <td>{n.uploadedBy?.fullName || n.uploadedBy?.email || '-'}</td>
               <td>{new Date(n.createdAt).toLocaleString()}</td>
               <td>
-                <button className="btn btn-danger" onClick={() => handleDelete(n._id)} disabled={deleting === n._id}>{deleting === n._id ? 'Deleting...' : 'Delete'}</button>
+                <button aria-label="Delete note" className="btn btn-danger" onClick={() => handleDelete(n._id)} disabled={deleting === n._id}>{deleting === n._id ? 'Deleting...' : <FaTrash />}</button>
               </td>
             </tr>
           ))}
