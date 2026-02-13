@@ -433,17 +433,15 @@ const AdminStudents = () => {
 
       {/* Pagination Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-        <div className="muted small">Showing {(filteredStudents.length === 0) ? 0 : ((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredStudents.length)} of {filteredStudents.length} students</div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="muted small">Showing {(totalStudents === 0) ? 0 : ((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalStudents)} of {totalStudents} students</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>First</button>
           <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
-          {/* simple numbered pages */}
-          {Array.from({ length: totalPages }).map((_, i) => {
-            const page = i + 1;
-            return (
-              <button key={page} className={`btn btn-sm ${page === currentPage ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setCurrentPage(page)}>{page}</button>
-            );
-          })}
+          <div style={{ padding: '6px 10px', borderRadius: 6, background: '#f1f3f5', minWidth: 120, textAlign: 'center', fontWeight: 600 }}>
+            Page {currentPage} of {totalPages}
+          </div>
           <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>Last</button>
         </div>
       </div>
 
