@@ -1559,35 +1559,9 @@ function Schedule() {
         return;
       }
 
-      const nowMidnight = new Date();
-      nowMidnight.setHours(0,0,0,0);
-
-      const mapped = res.filter(e => {
-        try {
-          // keep upcoming or today's events; admin may see past events too but we keep scheduled
-          const d = e.date ? new Date(e.date) : null;
-          if (!d || isNaN(d)) return false;
-          return d >= nowMidnight || (userRole === 'admin');
-        } catch (err) { return false; }
-      }).map(e => ({
-        title: e.title,
-        instructor: getInstructorName(e),
-        instructorId: e.instructor && (e.instructor._id || e.instructor) ? (e.instructor._id || e.instructor).toString() : null,
-        createdByUserId: e.createdByUserId && (e.createdByUserId._id || e.createdByUserId) ? (e.createdByUserId._id || e.createdByUserId).toString() : null,
-        createdByRole: e.createdByRole || null,
-        deletedByRole: e.deletedByRole || null,
-        date: e.date ? new Date(e.date).toLocaleDateString() : 'TBD',
-        rawDate: e.date || null,
-        time: `${e.startTime || 'TBD'} - ${e.endTime || 'TBD'}`,
-        location: e.location || 'Online',
-        students: getStudentsText(e),
-        type: e.type || 'Live Class',
-        status: e.status || 'Scheduled',
-        meetLink: e.meetLink || null,
-        course: e.course || null,
-        courseId: e.course && (e.course._id || e.course) ? (e.course._id || e.course) : null,
-        _id: e._id
-      }));
+      // Use shared util to map/filter upcoming events the same way across pages
+      const { getUpcomingFromApi } = await import('../utils/events');
+      const mapped = getUpcomingFromApi(res, userProfile, userRole);
 
       // Filter out soft-deleted events for non-admins
       const visible = mapped.filter(ev => {

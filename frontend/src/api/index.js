@@ -93,6 +93,11 @@ export async function getDashboardFeed() {
   return res.json();
 }
 
+export async function getMarqueeFeed(limit = 5) {
+  const res = await fetch(`${BASE}/student/dashboard-marquee?limit=${limit}`, { headers: authHeaders() });
+  return res.json();
+}
+
 export async function getProfile() {
   const res = await fetch(`${BASE}/users/profile`, { headers: authHeaders() });
   return res.json();

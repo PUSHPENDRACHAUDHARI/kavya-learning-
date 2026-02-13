@@ -122,6 +122,7 @@ function Sidebar({ isOpen, setIsOpen }) {
     ...(userRole === 'instructor' ? [
       { type: 'section', label: 'Instructor Panel' },
       { path: "/instructor/dashboard", label: "Dashboard", icon: <FiHome /> },
+      { path: "/instructor/notes", label: "Notes", icon: <LuGalleryHorizontalEnd /> },
       { path: "/instructor/courses", label: "My Courses", icon: <AiOutlineBook /> },
       { path: "/instructor/attendance", label: "Attendance", icon: <MdEditDocument /> },
       { path: "/instructor/students", label: "Students", icon: <MdPerson/> },

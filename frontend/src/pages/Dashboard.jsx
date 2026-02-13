@@ -9,7 +9,8 @@ import { FaArrowTrendUp } from "react-icons/fa6";
 import AppLayout from "../components/AppLayout";
 import ChatBox from "../components/ChatBox"; // ✅ Import ChatBox
 import "../assets/dashboard.css";
-import { getDashboardFeed } from "../api/index.js";
+import { getDashboardFeed, getMarqueeFeed } from "../api/index.js";
+import { getUpcomingFromApi } from "../utils/events";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -34,6 +35,7 @@ function Dashboard() {
 
   // ANNOUNCEMENTS
   const [dashboardFeed, setDashboardFeed] = useState([]); // Combined (live/upcoming/notifications/announcements)
+  const [marqueeItems, setMarqueeItems] = useState([]); // upcoming-only for marquee
   const [announcements] = useState([]); // kept for backward compatibility, but we render `dashboardFeed` primarily
 
   // Helper to map feed items to display text for ticker
@@ -56,13 +58,22 @@ function Dashboard() {
     }
   };
 
+  // Marquee-specific formatter: only upcoming events/reminders (name, date, time)
+  const marqueeToTicker = (item) => {
+    try {
+      if (!item) return '';
+      const name = item.title || item.name || item.eventTitle || 'Untitled';
+      const dateObj = item.date ? new Date(item.date) : (item.sortDate ? new Date(item.sortDate) : null);
+      const dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString() : (item.date || 'TBD');
+      const timeStr = item.startTime ? `${item.startTime}${item.endTime ? ' - ' + item.endTime : ''}` : (dateObj && !isNaN(dateObj) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD');
+      return `${name} — ${dateStr} ${timeStr}`;
+    } catch (e) { return item.title || item.message || ''; }
+  };
 
-  // UPCOMING CLASSES
-  const upcoming = [
-    { title: "Mathematics", date: "25 february 2026, 1:00 PM" },
-    { title: "Physics", date: "10 March 2026, 10:00 AM" },
-    { title: "Chemistry", date: "25 March 2026, 2:00 PM"},
-  ];
+
+  // UPCOMING CLASSES (dynamic)
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || 'student');
+  const [upcomingClasses, setUpcomingClasses] = useState([]);
 
   // ✅ Greeting passed to Header from Dashboard ONLY
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.email ? user.email.split('@')[0] : 'User');
@@ -147,6 +158,7 @@ function Dashboard() {
         if (profileRes.ok) {
           const profileData = await profileRes.json();
           setUser(profileData);
+          if (profileData.role) setUserRole(profileData.role);
           try {
             // Preserve isFirstLogin from localStorage if it exists, otherwise use firstLogin from profile
             const storedUser = localStorage.getItem('user');
@@ -289,6 +301,18 @@ function Dashboard() {
             }));
             setEnrolledCourses(coursesData);
           }
+
+          // Load upcoming classes using the same API + mapping logic as Schedule
+          try {
+            const api = await import('../api');
+            const events = await api.getEvents();
+            if (Array.isArray(events)) {
+              const mappedUpcoming = getUpcomingFromApi(events, userProfileData, userProfileData.role || userRole);
+              setUpcomingClasses(mappedUpcoming);
+            }
+          } catch (e) {
+            console.warn('Failed to load upcoming classes for dashboard', e);
+          }
         }
 
         // Fetch user's achievements
@@ -341,6 +365,17 @@ function Dashboard() {
     
     loadProfile();
 
+    // Load marquee items (upcoming events + reminders only)
+    (async () => {
+      try {
+        const m = await getMarqueeFeed(20);
+        if (m && m.success) setMarqueeItems(m.data || []);
+        else if (m && Array.isArray(m)) setMarqueeItems(m || []);
+      } catch (e) {
+        console.warn('Failed to load marquee items', e);
+      }
+    })();
+
     // Poll the feed periodically (near-real-time)
     const feedPollInterval = setInterval(() => {
       console.log('🔄 Dashboard: Polling dashboard feed...');
@@ -366,10 +401,27 @@ function Dashboard() {
       loadProfile();
     };
     window.addEventListener('enrollmentUpdated', handleEnrollmentUpdate);
+    // Refresh marquee when events or reminders change elsewhere
+    const handleEventsChanged = async () => {
+      try {
+        const m = await getMarqueeFeed(20);
+        if (m && m.success) setMarqueeItems(m.data || []);
+        else if (m && Array.isArray(m)) setMarqueeItems(m || []);
+      } catch (e) { console.warn('Failed to refresh marquee after events change', e); }
+    };
+    window.addEventListener('events:changed', handleEventsChanged);
+    window.addEventListener('reminderSet', handleEventsChanged);
     console.log('✅ Dashboard: Event listeners registered');
     console.log('✅ Dashboard: Ready to receive enrollmentUpdated events');
 
-    // Note: listeners are removed by the single cleanup below (to avoid duplication)
+    // Note: remove listeners and clear poll on cleanup
+    return () => {
+      try { clearInterval(feedPollInterval); } catch (e) {}
+      try { window.removeEventListener('focus', handleFocus); } catch (e) {}
+      try { window.removeEventListener('enrollmentUpdated', handleEnrollmentUpdate); } catch (e) {}
+      try { window.removeEventListener('events:changed', handleEventsChanged); } catch (e) {}
+      try { window.removeEventListener('reminderSet', handleEventsChanged); } catch (e) {}
+    };
     
   }, []);
 
@@ -544,14 +596,14 @@ function Dashboard() {
       {/* ============ ANNOUNCEMENTS / FEED SCROLL ============ */}
       <div className="latest-announcement" style={{ background: "#d9e8feff", padding: "12px 0", margin: "20px 0", borderRadius: "10px", overflow: "hidden", whiteSpace: "nowrap" }}>
         <div style={{ display: "inline-block", paddingLeft: "100%", animation: "scroll-left 15s linear infinite", fontSize: "16px", fontWeight: "500", color: "#1A365D" }}>
-          {dashboardFeed && dashboardFeed.length > 0 ? (
-            dashboardFeed.slice(0, 20).map((item, index) => (
+          {marqueeItems && marqueeItems.length > 0 ? (
+            marqueeItems.slice(0, 20).map((item, index) => (
               <span key={item.id || index} style={{ marginRight: "30px", color: "#1A365D", textDecoration: "none", cursor: "pointer" }}>
-                {feedToTicker(item)}
+                {marqueeToTicker(item)}
               </span>
             ))
           ) : (
-            <span style={{ color: "#1A365D" }}>No recent updates. Stay tuned!</span>
+            <span style={{ color: "#1A365D" }}>No upcoming reminders or events.</span>
           )}
         </div>
       </div>
@@ -604,8 +656,8 @@ function Dashboard() {
           {/* UPCOMING LIVE CLASSES */}
           <div className="card" style={{ borderRadius: "15px" }}>
             <h3 className="fw-normal upcoming-head">Upcoming Live Classes</h3>
-            {upcoming.map((u) => (
-              <div key={u.title} className="class-item fw-light">
+            {upcomingClasses && upcomingClasses.length > 0 ? upcomingClasses.map((u) => (
+              <div key={u._id || u.title} className="class-item fw-light">
                 <div>
                   <h3 style={{ fontSize: "18px" }}>{u.title}</h3>
                   <p>{u.date}</p>
@@ -647,7 +699,9 @@ function Dashboard() {
                   {reminders[u.title] ? 'Reminded ✓' : 'Remind'}
                 </button>
               </div>
-            ))}
+            )) : (
+              <div style={{ padding: '12px 20px', color: '#758096' }}>No upcoming classes</div>
+            )}
             {activeVideo && (
               <div style={{ marginTop: "15px" }}>
                 <iframe width="100%" height="300" src={activeVideo} style={{ borderRadius: "10px" }} allow="autoplay; encrypted-media"></iframe>

@@ -45,7 +45,8 @@ router.delete('/announcements/:id', protect, authorize('admin'), admin.deleteAnn
 const { uploadFiles } = require('../middleware/multer');
 const noteController = require('../controllers/noteController');
 router.post('/notes', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), uploadFiles.single('file'), noteController.uploadNote);
-router.get('/notes', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), noteController.listNotesAdmin);
+// Admins should see only notes they uploaded on the admin notes page
+router.get('/notes', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), noteController.listOwnNotes);
 router.delete('/notes/:id', protect, authorize('admin','sub-admin'), requirePermission('manageNotes'), noteController.deleteNote);
 
 // Instructors (admin or sub-admin with manageStudents permission)

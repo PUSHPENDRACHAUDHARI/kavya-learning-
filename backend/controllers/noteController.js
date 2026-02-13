@@ -32,7 +32,8 @@ exports.uploadNote = async (req, res) => {
 // List notes for admin
 exports.listNotesAdmin = async (req, res) => {
   try {
-    const notes = await Note.find().populate('uploadedBy', 'fullName email').sort({ createdAt: -1 });
+    // By default, admin list should show notes uploaded by the requesting admin only
+    const notes = await Note.find({ uploadedBy: req.user._id }).populate('uploadedBy', 'fullName email').sort({ createdAt: -1 });
     res.json({ data: notes });
   } catch (err) {
     console.error('listNotesAdmin error', err);
@@ -52,6 +53,14 @@ exports.deleteNote = async (req, res) => {
       return res.status(404).json({ message: 'Note not found' });
     }
     console.log('✅ Note found:', note.title, 'PublicId:', note.publicId);
+
+    // Authorization: allow deletion only if requester uploaded the note or is an admin
+    const requesterRole = req.user && (req.user.role || req.user.userRole || '');
+    const isAdmin = String(requesterRole).toLowerCase() === 'admin';
+    if (!isAdmin && String(note.uploadedBy) !== String(req.user._id)) {
+      console.warn('Unauthorized delete attempt by', req.user._id);
+      return res.status(403).json({ message: 'Not authorized to delete this note' });
+    }
 
     // Attempt to remove from Cloudinary (if present)
     if (note.publicId) {
@@ -86,6 +95,17 @@ exports.deleteNote = async (req, res) => {
   } catch (err) {
     console.error('❌ deleteNote error:', err);
     res.status(500).json({ message: 'Delete failed', error: err.message });
+  }
+};
+
+// List notes uploaded by the requesting user (used by instructors and admins wanting to see their own notes)
+exports.listOwnNotes = async (req, res) => {
+  try {
+    const notes = await Note.find({ uploadedBy: req.user._id }).populate('uploadedBy', 'fullName email').sort({ createdAt: -1 });
+    res.json({ data: notes });
+  } catch (err) {
+    console.error('listOwnNotes error', err);
+    res.status(500).json({ message: 'Failed to list notes' });
   }
 };
 

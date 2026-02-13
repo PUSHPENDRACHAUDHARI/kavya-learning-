@@ -40,6 +40,7 @@ import InstructorLessons from './pages/Instructor/InstructorLessons';
 import InstructorAnalytics from './pages/Instructor/InstructorAnalytics';
 import InstructorAttendance from './pages/Instructor/InstructorAttendance';
 import CourseLiveSessions from './pages/Instructor/CourseLiveSessions';
+import InstructorNotes from './pages/Instructor/InstructorNotes';
 // Student Pages
 import StudentDashboard from './pages/Student/StudentDashboard';
 import StudentCourses from './pages/Student/StudentCourses';
@@ -122,6 +123,7 @@ function Layout() {
           <Route path="/instructor/lessons" element={<ProtectedRoute requireRole="instructor"><InstructorLessons /></ProtectedRoute>} />
           <Route path="/instructor/analytics" element={<ProtectedRoute requireRole="instructor"><InstructorAnalytics /></ProtectedRoute>} />
           <Route path="/instructor/announcements" element={<ProtectedRoute requireRole="instructor"><InstructorAnnouncements /></ProtectedRoute>} />
+          <Route path="/instructor/notes" element={<ProtectedRoute requireRole="instructor"><InstructorNotes /></ProtectedRoute>} />
           <Route path="/instructor/attendance" element={<ProtectedRoute requireRole="instructor"><InstructorAttendance /></ProtectedRoute>} />
           <Route path="/instructor/live-sessions/:courseId" element={<ProtectedRoute requireRole="instructor"><CourseLiveSessions /></ProtectedRoute>} />
 
