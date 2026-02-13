@@ -171,12 +171,36 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
+// Start server with Socket.IO so controllers can emit real-time events
+const http = require('http');
+const { Server: SocketIOServer } = require('socket.io');
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`
-🚀 Server running on port ${PORT}
-👉 API Documentation: http://localhost:${PORT}/api-docs
-📝 MongoDB URI: ${process.env.MONGO_URI}
-  `);
+const server = http.createServer(app);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: allowAll ? '*' : allowedOrigins,
+    methods: ['GET', 'POST']
+  }
+});
+
+// Make io available globally to controllers that want to emit events
+global.io = io;
+
+io.on('connection', (socket) => {
+  // Clients should join a room with their userId after connecting
+  socket.on('join', (userId) => {
+    try {
+      if (userId) socket.join(userId.toString());
+    } catch (err) {
+      console.error('Socket join error', err);
+    }
+  });
+
+  socket.on('disconnect', () => {});
+});
+
+server.listen(PORT, () => {
+  console.log(`\n🚀 Server running on port ${PORT}`);
 });
