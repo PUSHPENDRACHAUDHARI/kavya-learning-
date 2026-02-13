@@ -11,20 +11,10 @@ const InstructorStudents = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentDetails, setStudentDetails] = useState(null);
-  const [studentLoading, setStudentLoading] = useState(false);
-  const [studentError, setStudentError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  
   const [actionLoading, setActionLoading] = useState(null);
 
-  const filteredStudents = useMemo(() => {
-    const q = (searchQuery || '').toLowerCase().trim();
-    if (!q) return students;
-    return (students || []).filter(s => {
-      const name = (s.fullName || s.name || '').toLowerCase();
-      const email = (s.email || '').toLowerCase();
-      return name.includes(q) || email.includes(q);
-    });
-  }, [students, searchQuery]);
+  const filteredStudents = students || [];
 
   useEffect(() => {
     loadStudents();
@@ -101,15 +91,7 @@ const InstructorStudents = () => {
             >
               <FiArrowLeft /> Back
             </button>
-            <div>
-              <input
-                type="text"
-                placeholder="Search students by name or email..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{ padding: 8, borderRadius: 6, border: '1px solid #ddd', width: 320 }}
-              />
-            </div>
+            {/* search removed per request */}
           </div>
           
         </div>

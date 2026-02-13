@@ -13,8 +13,7 @@ const AdminCourses = () => {
   const [deleting, setDeleting] = useState(null);
   const [editingCourse, setEditingCourse] = useState(null);
   const [deleteError, setDeleteError] = useState('');
-  // Search state
-  const [titleQuery, setTitleQuery] = useState('');
+  // Search state removed per request
   const [levelFilter, setLevelFilter] = useState('all');
 
   const navigate = useNavigate();
@@ -67,15 +66,13 @@ const AdminCourses = () => {
 
   const filteredCourses = useMemo(() => {
     let out = courses.filter((c) => {
-      const q = (titleQuery || '').toLowerCase().trim();
-      if (q && !(c.title || '').toLowerCase().includes(q)) return false;
       if (levelFilter && levelFilter !== 'all') {
         return (c.level || '').toLowerCase() === levelFilter;
       }
       return true;
     });
     return out;
-  }, [courses, titleQuery, levelFilter]);
+  }, [courses, levelFilter]);
 
   if (loading) return <AppLayout><div style={{ padding: '20px', textAlign: 'center' }}>Loading courses...</div></AppLayout>;
 
@@ -124,16 +121,8 @@ const AdminCourses = () => {
               {showForm ? "Hide Form" : "Add Course"}
             </button>
           </div>
-      {/* Search controls */}
+      {/* Search controls (title search removed per request) */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-        <input
-          type="text"
-          placeholder="Search by title..."
-          value={titleQuery}
-          onChange={e => setTitleQuery(e.target.value)}
-          style={{ padding: 8, width: 280 }}
-        />
-
         <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)} style={{ padding: 8 }}>
           <option value="all">All levels</option>
           <option value="Beginner">Beginner</option>

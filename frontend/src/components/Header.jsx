@@ -55,6 +55,17 @@ function Header({ onToggleSidebar, children }) {
     }
   })();
 
+  // Detect admin/instructor roles so we can hide global search for those panels
+  const isAdminOrInstructor = (() => {
+    try {
+      const r = (localStorage.getItem('userRole') || '').toString();
+      const lower = r.toLowerCase();
+      return lower.includes('admin') || lower.includes('instructor');
+    } catch (e) {
+      return false;
+    }
+  })();
+
   // Expanded client-side route index with templates for dynamic routes
   const ROUTE_INDEX = [
     { type: 'page', id: 'dashboard', title: 'Dashboard', route: '/dashboard' },
@@ -830,8 +841,8 @@ function Header({ onToggleSidebar, children }) {
       </div>
  
       <div className="header-right" style={{ position: "relative" }}>
-        {/* Global Search Bar (hidden for student role) */}
-        {!isStudentRole && (
+        {/* Global Search Bar (hidden for student, admin and instructor panels) */}
+        {!isStudentRole && !isAdminOrInstructor && (
           <div style={{ display: 'inline-block', marginRight: '12px', verticalAlign: 'middle' }}>
             <SearchBox />
           </div>

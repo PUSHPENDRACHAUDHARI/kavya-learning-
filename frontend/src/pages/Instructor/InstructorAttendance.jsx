@@ -8,7 +8,7 @@ function InstructorAttendance() {
   const [events, setEvents] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
-  const [searchTerm, setSearchTerm] = useState('');
+  // searchTerm removed per request
   const [loading, setLoading] = useState(false);
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
@@ -53,13 +53,8 @@ function InstructorAttendance() {
     setCurrentPage(1);
   }, [events.length]);
 
-  // Reset to first page when the search term changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
   // Derived lists for filtering and pagination
-  const term = (searchTerm || '').toString().trim().toLowerCase();
+  const term = '';
 
   // remove events that have no meaningful display data (avoid rows with only '-')
   const meaningfulEvents = events.filter(ev => {
@@ -70,7 +65,7 @@ function InstructorAttendance() {
     return title !== '' || hasInstructor || hasDate || hasTime;
   });
 
-  const filteredEvents = term ? meaningfulEvents.filter(ev => ((ev.title || ev.name || '') + '').toLowerCase().includes(term)) : meaningfulEvents;
+  const filteredEvents = meaningfulEvents;
   const totalFiltered = filteredEvents.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
@@ -344,17 +339,9 @@ function InstructorAttendance() {
           <div style={{ marginTop: 24 }}>
             {events.length > 0 ? (
               <>
-              <div className="attendance-header" style={{ marginBottom: 12 }}>
+                <div className="attendance-header" style={{ marginBottom: 12 }}>
                 <div className="search-group" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={{ marginRight: 6, color: '#333', fontWeight: 600 }}>Search:</label>
-                  <input
-                    className="search-input"
-                    type="search"
-                    placeholder="Search session name"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', minWidth: 260 }}
-                  />
+                  {/* search removed per request */}
                 </div>
                 <div className="total-events" style={{ color: '#555', fontSize: 14 }}>
                   <strong>Total Events:</strong> {meaningfulEvents.length}
