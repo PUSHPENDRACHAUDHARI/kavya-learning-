@@ -11,8 +11,9 @@ const InstructorStudents = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentDetails, setStudentDetails] = useState(null);
-  
   const [actionLoading, setActionLoading] = useState(null);
+  const [studentLoading, setStudentLoading] = useState(false);
+  const [studentError, setStudentError] = useState(null);
 
   const filteredStudents = students || [];
 
@@ -69,6 +70,8 @@ const InstructorStudents = () => {
   const handleCloseDetails = () => {
     setSelectedStudent(null);
     setStudentDetails(null);
+    setStudentError(null);
+    setStudentLoading(false);
   };
 
   if (loading) {
@@ -128,8 +131,12 @@ const InstructorStudents = () => {
                         // Prefer authoritative stats if available
                         (student.stats && typeof student.stats.totalCoursesEnrolled === 'number')
                           ? student.stats.totalCoursesEnrolled
-                          // Otherwise derive from enrolledCourses array when present
-                          : (Array.isArray(student.enrolledCourses) ? student.enrolledCourses.length : (student.enrolledInCourseCount || 0))
+                          // Some list endpoints attach total at top-level as `totalCoursesEnrolled` — prefer that next
+                          : (typeof student.totalCoursesEnrolled === 'number'
+                              ? student.totalCoursesEnrolled
+                              // Otherwise derive from enrolledCourses array when present
+                              : (Array.isArray(student.enrolledCourses) ? student.enrolledCourses.length : (student.enrolledInCourseCount || 0))
+                            )
                       )}
                     </td>
                     <td style={{ padding: '12px' }}>
