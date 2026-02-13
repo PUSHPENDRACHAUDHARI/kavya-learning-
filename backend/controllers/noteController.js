@@ -22,9 +22,19 @@ exports.uploadNote = async (req, res) => {
       uploadedBy: req.user._id
     };
 
-    // Optional visibility controls passed from admin form
-    if (req.body.instructorId) noteData.instructor = req.body.instructorId;
-    if (req.body.subjectId) noteData.subject = req.body.subjectId;
+    // If the uploader is an instructor, enforce subject-based visibility
+    const uploaderRole = (req.user && (req.user.role || req.user.userRole || '')).toString().toLowerCase();
+    if (uploaderRole === 'instructor') {
+      // Require a subject/course id to scope the note
+      const subjectId = req.body.subjectId || req.body.courseId || null;
+      if (!subjectId) return res.status(400).json({ message: 'Instructors must specify a subject/course for the note' });
+      noteData.instructor = req.user._id; // owner instructor
+      noteData.subject = subjectId;
+    } else {
+      // Admins may optionally set instructor or subject
+      if (req.body.instructorId) noteData.instructor = req.body.instructorId;
+      if (req.body.subjectId) noteData.subject = req.body.subjectId;
+    }
 
     const note = new Note(noteData);
 
@@ -120,18 +130,27 @@ exports.listOwnNotes = async (req, res) => {
       return res.json({ data: notes });
     }
 
-    // Instructors: return notes that are either explicitly assigned to this instructor,
-    // uploaded by this instructor, assigned to any of their courses, or global (no instructor and no subject).
+    // For instructors, only return:
+    // - notes explicitly assigned to this instructor
+    // - notes uploaded by this instructor
+    // - notes assigned to any course/subject this instructor is assigned to
+    // - global notes (if desired)
     if (role === 'instructor') {
-      // fetch instructor's course IDs
-      const courses = await Course.find({ instructor: req.user._id }).select('_id').lean();
-      const courseIds = courses.map(c => c._id).filter(Boolean);
+      // gather course IDs where this instructor is assigned
+      // 1) courses that have `instructor` set to this user
+      const primaryCourses = await Course.find({ instructor: req.user._id }).select('_id').lean();
+      const primaryCourseIds = primaryCourses.map(c => c._id).filter(Boolean);
+
+      // 2) courses listed on the user's `assignedCourses` (supports multiple instructors per course)
+      const assignedCourseIds = Array.isArray(req.user.assignedCourses) ? req.user.assignedCourses.map(id => id) : [];
+
+      const courseIds = Array.from(new Set([...primaryCourseIds, ...assignedCourseIds]));
 
       const orConditions = [];
       orConditions.push({ instructor: req.user._id });
       orConditions.push({ uploadedBy: req.user._id });
       if (courseIds.length) orConditions.push({ subject: { $in: courseIds } });
-      // global notes (visible to everyone)
+      // include global notes (no instructor and no subject) if admins want to publish globally
       orConditions.push({ instructor: null, subject: null });
 
       const notes = await Note.find({ $or: orConditions })
