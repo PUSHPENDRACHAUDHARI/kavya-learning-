@@ -9,5 +9,11 @@ const noteSchema = new mongoose.Schema({
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 
+// Optional visibility restrictions: instructor and subject (course)
+noteSchema.add({
+  instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', default: null }
+});
+
 const Note = mongoose.model('Note', noteSchema);
 module.exports = Note;
