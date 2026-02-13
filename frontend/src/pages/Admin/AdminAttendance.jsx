@@ -13,7 +13,7 @@ function AdminAttendance() {
   const [attendanceList, setAttendanceList] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  // searchTerm removed per request
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
 
@@ -52,7 +52,7 @@ function AdminAttendance() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, records.length]);
+  }, [records.length]);
 
   const viewDetails = async (eventId) => {
     setAttendanceLoading(true);
@@ -135,7 +135,6 @@ function AdminAttendance() {
     doc.save(fn);
   };
   // derived lists for display (map aggregated records into rows using eventsMap)
-  const term = (searchTerm || '').toString().trim().toLowerCase();
   const mapped = records.map(r => {
     const ev = r.eventId ? eventsMap[String(r.eventId)] : null;
     return {
@@ -161,7 +160,7 @@ function AdminAttendance() {
   });
 
   const source = meaningfulMapped; // use this as the base list for search/pagination
-  const filtered = term ? source.filter(m => ((m.title || '') + '').toLowerCase().includes(term)) : source;
+  const filtered = source;
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = (currentPage - 1) * pageSize;
@@ -183,15 +182,7 @@ function AdminAttendance() {
               <>
               <div className="attendance-header" style={{ marginBottom: 12 }}>
                 <div className="search-group" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <label style={{ marginRight: 6, color: '#333', fontWeight: 600 }}>Search:</label>
-                  <input
-                    className="search-input"
-                    type="search"
-                    placeholder="Search session name"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', minWidth: 260 }}
-                  />
+                  {/* search removed per request */}
                 </div>
                 <div className="total-events" style={{ color: '#555', fontSize: 14 }}>
                   <strong>Total Events:</strong> {source.length}

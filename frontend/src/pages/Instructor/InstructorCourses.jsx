@@ -26,20 +26,18 @@ const InstructorCourses = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const navigate = useNavigate();
   const { courseId } = useParams();
-  const [titleQuery, setTitleQuery] = useState('');
+  // title search removed per request
   const [levelFilter, setLevelFilter] = useState('all');
 
   const filteredCourses = useMemo(() => {
     let out = (courses || []).filter((c) => {
-      const q = (titleQuery || '').toLowerCase().trim();
-      if (q && !(c.title || '').toLowerCase().includes(q)) return false;
       if (levelFilter && levelFilter !== 'all') {
         return (c.level || '').toLowerCase() === String(levelFilter).toLowerCase();
       }
       return true;
     });
     return out;
-  }, [courses, titleQuery, levelFilter]);
+  }, [courses, levelFilter]);
 
   useEffect(() => {
     loadCourses();
@@ -249,16 +247,8 @@ const InstructorCourses = () => {
 </div>
 
 
-        {/* Search controls */}
+        {/* Search controls (title search removed per request) */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="Search by title..."
-            value={titleQuery}
-            onChange={e => setTitleQuery(e.target.value)}
-            style={{ padding: 8, width: 280 }}
-          />
-
           <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)} style={{ padding: 8 }}>
             <option value="all">All levels</option>
             <option value="Beginner">Beginner</option>

@@ -17,8 +17,8 @@ const AdminStudents = () => {
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [modalLoading, setModalLoading] = useState(false);
   const [modalMessage, setModalMessage] = useState(null);
-  // Search & sort state
-  const [searchQuery, setSearchQuery] = useState("");
+  // Search & sort state (name search removed)
+  
   const [cityQuery, setCityQuery] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
   const [nameSort, setNameSort] = useState("none"); // none | asc | desc
@@ -125,7 +125,7 @@ const AdminStudents = () => {
     }
 
     return out;
-  }, [students, searchQuery, cityQuery, genderFilter, nameSort]);
+  }, [students, cityQuery, genderFilter, nameSort]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -133,17 +133,9 @@ const AdminStudents = () => {
 
   // When page changes, load that page from server
   useEffect(() => {
-    loadStudents({ page: currentPage, limit: pageSize, search: searchQuery, sortBy: nameSort === 'none' ? undefined : 'fullName', sortOrder: nameSort === 'none' ? undefined : nameSort });
+    loadStudents({ page: currentPage, limit: pageSize, sortBy: nameSort === 'none' ? undefined : 'fullName', sortOrder: nameSort === 'none' ? undefined : nameSort });
   }, [currentPage]);
-
-  // Debounce search input and query server
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setCurrentPage(1);
-      loadStudents({ page: 1, limit: pageSize, search: searchQuery, sortBy: nameSort === 'none' ? undefined : 'fullName', sortOrder: nameSort === 'none' ? undefined : nameSort });
-    }, 400);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  // name search removed per request
 
   // server-driven pagination
   const totalPages = Math.max(1, Math.ceil((totalStudents || 0) / pageSize));
@@ -205,14 +197,8 @@ const AdminStudents = () => {
       </div>
 
       {/* SEARCH & FILTER CONTROLS */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Search student by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ padding: 8, width: 280 }}
-              />
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+              {/* name search removed per request */}
 
           <input
             type="text"

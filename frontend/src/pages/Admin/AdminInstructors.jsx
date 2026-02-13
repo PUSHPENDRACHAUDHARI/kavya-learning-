@@ -9,8 +9,7 @@ const AdminInstructors = () => {
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [emailSearch, setEmailSearch] = useState("");
+  // name/email search removed per request
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -55,25 +54,16 @@ const AdminInstructors = () => {
   // Filter and search instructors
   const filteredInstructors = useMemo(() => {
     let out = instructors.filter((i) => {
-      const name = (i.fullName || "").toLowerCase();
-      const email = (i.email || "").toLowerCase();
-      const searchName = (searchQuery || "").toLowerCase().trim();
-      const searchEmail = (emailSearch || "").toLowerCase().trim();
-
-      if (searchName && !name.includes(searchName)) return false;
-      if (searchEmail && !email.includes(searchEmail)) return false;
-
       if (statusFilter !== "all") {
         const status = i.status || "active";
         if (statusFilter === "active" && status !== "active") return false;
         if (statusFilter === "blocked" && status !== "blocked") return false;
       }
-
       return true;
     });
 
     return out;
-  }, [instructors, searchQuery, emailSearch, statusFilter]);
+  }, [instructors, statusFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredInstructors.length / itemsPerPage);
@@ -202,38 +192,7 @@ const AdminInstructors = () => {
             marginBottom: 20,
           }}
         >
-          <input
-            type="text"
-            placeholder="Search by name..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="form-control"
-            style={{
-              padding: "10px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              fontSize: "14px",
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search by email..."
-            value={emailSearch}
-            onChange={(e) => {
-              setEmailSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="form-control"
-            style={{
-              padding: "10px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              fontSize: "14px",
-            }}
-          />
+          {/* name/email search removed per request */}
           <select
             value={statusFilter}
             onChange={(e) => {

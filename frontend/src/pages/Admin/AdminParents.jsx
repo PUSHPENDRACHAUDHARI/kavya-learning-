@@ -6,9 +6,7 @@ import "../../assets/admin-dark-mode.css";
 const AdminParents = () => {
   const [parents, setParents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [emailSearch, setEmailSearch] = useState("");
-  const [phoneSearch, setPhoneSearch] = useState("");
+  // name/email/phone search removed per request
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -32,28 +30,16 @@ const AdminParents = () => {
   // Filter and search parents
   const filteredParents = useMemo(() => {
     let out = parents.filter((p) => {
-      const name = (p.fullName || "").toLowerCase();
-      const email = (p.email || "").toLowerCase();
-      const phone = (p.phone || "").toLowerCase();
-      const searchName = (searchQuery || "").toLowerCase().trim();
-      const searchEmail = (emailSearch || "").toLowerCase().trim();
-      const searchPhone = (phoneSearch || "").toLowerCase().trim();
-
-      if (searchName && !name.includes(searchName)) return false;
-      if (searchEmail && !email.includes(searchEmail)) return false;
-      if (searchPhone && !phone.includes(searchPhone)) return false;
-
       if (statusFilter !== "all") {
         const status = p.user_status || p.status || "Active";
         if (statusFilter === "active" && status === "Blocked") return false;
         if (statusFilter === "blocked" && status !== "Blocked") return false;
       }
-
       return true;
     });
 
     return out;
-  }, [parents, searchQuery, emailSearch, phoneSearch, statusFilter]);
+  }, [parents, statusFilter]);
 
   // Pagination
   const totalPages = Math.ceil(filteredParents.length / itemsPerPage);
@@ -114,38 +100,7 @@ const AdminParents = () => {
             flexWrap: "wrap",
           }}
         >
-          <input
-            type="text"
-            placeholder="Search parent by name..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{ padding: 8, width: 220 }}
-          />
-
-          <input
-            type="text"
-            placeholder="Search by email..."
-            value={emailSearch}
-            onChange={(e) => {
-              setEmailSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{ padding: 8, width: 200 }}
-          />
-
-          <input
-            type="text"
-            placeholder="Search by phone..."
-            value={phoneSearch}
-            onChange={(e) => {
-              setPhoneSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{ padding: 8, width: 180 }}
-          />
+          {/* name/email/phone search removed per request */}
 
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             Status:
