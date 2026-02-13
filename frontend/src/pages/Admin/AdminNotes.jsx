@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { FaTrash } from 'react-icons/fa';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
 
@@ -131,7 +132,7 @@ const AdminNotes = () => {
               <td>{n.uploadedBy?.fullName || n.uploadedBy?.email || '-'}</td>
               <td>{new Date(n.createdAt).toLocaleString()}</td>
               <td>
-                <button className="btn btn-danger" onClick={() => handleDelete(n._id)} disabled={deleting === n._id}>{deleting === n._id ? 'Deleting...' : 'Delete'}</button>
+                <button aria-label="Delete note" className="btn btn-danger" onClick={() => handleDelete(n._id)} disabled={deleting === n._id}>{deleting === n._id ? 'Deleting...' : <FaTrash />}</button>
               </td>
             </tr>
           ))}
