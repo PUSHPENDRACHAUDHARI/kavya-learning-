@@ -1,4 +1,6 @@
 const Note = require('../models/noteModel');
+const Enrollment = require('../models/enrollmentModel');
+const Course = require('../models/courseModel');
 const { uploadToCloudinary } = require('../config/cloudinary');
 const cloudinary = require('cloudinary').v2;
 
@@ -11,14 +13,20 @@ exports.uploadNote = async (req, res) => {
     // Upload to Cloudinary as raw (auto detection)
     const result = await uploadToCloudinary(buffer, { resource_type: 'auto', folder: 'notes' });
 
-    const note = new Note({
+    const noteData = {
       title: req.body.title || req.file.originalname,
       filename: req.file.originalname,
       publicId: result.public_id,
       url: result.secure_url,
       mimeType: req.file.mimetype,
       uploadedBy: req.user._id
-    });
+    };
+
+    // Optional visibility controls passed from admin form
+    if (req.body.instructorId) noteData.instructor = req.body.instructorId;
+    if (req.body.subjectId) noteData.subject = req.body.subjectId;
+
+    const note = new Note(noteData);
 
     await note.save();
 
@@ -101,7 +109,11 @@ exports.deleteNote = async (req, res) => {
 // List notes uploaded by the requesting user (used by instructors and admins wanting to see their own notes)
 exports.listOwnNotes = async (req, res) => {
   try {
-    const notes = await Note.find({ uploadedBy: req.user._id }).populate('uploadedBy', 'fullName email').sort({ createdAt: -1 });
+    const notes = await Note.find({ uploadedBy: req.user._id })
+      .populate('uploadedBy', 'fullName email')
+      .populate('instructor', 'fullName email')
+      .populate('subject', 'title')
+      .sort({ createdAt: -1 });
     res.json({ data: notes });
   } catch (err) {
     console.error('listOwnNotes error', err);
@@ -112,7 +124,26 @@ exports.listOwnNotes = async (req, res) => {
 // List notes for students
 exports.listStudentNotes = async (req, res) => {
   try {
-    const notes = await Note.find().select('title url mimeType createdAt uploadedBy').sort({ createdAt: -1 });
+    const studentId = req.user && req.user._id;
+
+    // Get student's enrolled course IDs
+    const enrollments = await Enrollment.find({ studentId }).select('courseId').lean();
+    const courseIds = enrollments.map(e => e.courseId).filter(Boolean);
+
+    // Get instructors for those courses (students of these instructors)
+    let instructorIds = [];
+    if (courseIds.length) {
+      const courses = await Course.find({ _id: { $in: courseIds } }).select('instructor').lean();
+      instructorIds = courses.map(c => c.instructor).filter(Boolean);
+    }
+
+    // Build query: include global notes (no instructor & no subject) OR notes matching student's instructor assignments OR student's enrolled courses
+    const orConditions = [];
+    orConditions.push({ instructor: null, subject: null });
+    if (instructorIds.length) orConditions.push({ instructor: { $in: instructorIds } });
+    if (courseIds.length) orConditions.push({ subject: { $in: courseIds } });
+
+    const notes = await Note.find({ $or: orConditions }).select('title url mimeType createdAt uploadedBy instructor subject').populate('uploadedBy', 'fullName email').sort({ createdAt: -1 });
     res.json({ data: notes });
   } catch (err) {
     console.error('listStudentNotes error', err);
