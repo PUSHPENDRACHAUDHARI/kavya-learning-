@@ -28,6 +28,10 @@ function Dashboard() {
   const [enrolledCourses, setEnrolledCourses] = useState([]); // Fetch enrolled courses from backend
   const coursesContainerRef = useRef(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
+  
+  // Achievement loading and error states
+  const [achievementsLoading, setAchievementsLoading] = useState(false);
+  const [achievementsError, setAchievementsError] = useState(null);
 
   // ANNOUNCEMENTS
   const [dashboardFeed, setDashboardFeed] = useState([]); // Combined (live/upcoming/notifications/announcements)
@@ -99,6 +103,43 @@ function Dashboard() {
       </p>
     </div>
   );
+
+  // Fetch user's achievements with error handling
+  const fetchAchievements = async () => {
+    try {
+      setAchievementsLoading(true);
+      setAchievementsError(null);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setAchievementsError('Please log in to view achievements');
+        setAchievementsLoading(false);
+        return;
+      }
+
+      const achRes = await fetch('/api/achievements/my-achievements', {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!achRes.ok) {
+        throw new Error('Failed to fetch achievements');
+      }
+
+      const achData = await achRes.json();
+      setAchievements(achData || []);
+      setAchievementsCount(achData.length);
+      setAchievementsError(null);
+    } catch (err) {
+      console.error('❌ Error fetching achievements:', err);
+      setAchievementsError(err.message || 'Failed to load achievements');
+      setAchievements([]);
+    } finally {
+      setAchievementsLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Lazy-load profile; use the app's API helper if available.
@@ -275,17 +316,7 @@ function Dashboard() {
         }
 
         // Fetch user's achievements
-        const achRes = await fetch('/api/achievements/my-achievements', {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          }
-        });
-        if (achRes.ok) {
-          const achData = await achRes.json();
-          setAchievements(achData || []);
-          setAchievementsCount(achData.length);
-        }
+        await fetchAchievements();
 
         // Fetch recent achievements from all students
         const recentAchRes = await fetch('/api/achievements/recent', {
@@ -392,6 +423,69 @@ function Dashboard() {
       try { window.removeEventListener('reminderSet', handleEventsChanged); } catch (e) {}
     };
     
+  }, []);
+
+  // Keep Top Performers in sync with the Leaderboard page by polling the same API
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTopPerformers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/achievements/leaderboard', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : undefined
+          }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (Array.isArray(data.leaderboard) ? data.leaderboard : []);
+
+        const topThree = list.slice(0, 3).map((entry, index) => ({
+          rank: entry.rank || index + 1,
+          userId: entry._id && entry._id._id ? String(entry._id._id) : (entry.userId || (entry._id && String(entry._id)) || null),
+          name: (entry._id && (entry._id.fullName || entry._id.name || entry._id.email)) || entry.name || `Student ${index + 1}`,
+          totalPoints: entry.totalPoints || 0
+        }));
+
+        if (!mounted) return;
+        setLeaderboard(topThree);
+      } catch (err) {
+        console.warn('Failed to load top performers for dashboard:', err);
+      }
+    };
+
+    loadTopPerformers();
+    const id = setInterval(loadTopPerformers, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Poll achievements every 30 seconds so students see real-time achievement updates
+  useEffect(() => {
+    let mounted = true;
+
+    const pollAchievements = async () => {
+      if (!mounted) return;
+      try {
+        console.log('🔄 Dashboard: Polling achievements...');
+        await fetchAchievements();
+      } catch (err) {
+        console.warn('Failed to poll achievements', err);
+      }
+    };
+
+    // Initial load
+    pollAchievements();
+    const id = setInterval(pollAchievements, 30000); // 30s
+
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
   }, []);
 
   // Poll dashboard feed every 30 seconds so students see near-real-time updates
@@ -658,8 +752,24 @@ function Dashboard() {
           <div className="card recent-achievements" style={{ borderRadius: "15px" }}>
             <h3>Recent Achievements</h3>
             <ul className="achievement-ul">
+              {/* Display loading state */}
+              {achievementsLoading && (
+                <li className="achievement-li" style={{ textAlign: 'center', padding: '20px' }}>
+                  <p style={{ color: '#758096', fontSize: '14px' }}>Loading achievements...</p>
+                </li>
+              )}
+
+              {/* Display error state */}
+              {achievementsError && !achievementsLoading && (
+                <li className="achievement-li" style={{ textAlign: 'center', padding: '20px' }}>
+                  <p style={{ color: '#ef4444', fontSize: '14px' }}>
+                    ⚠️ {achievementsError}
+                  </p>
+                </li>
+              )}
+
               {/* Display user's earned badges first */}
-              {earnedBadges && earnedBadges.length > 0 && (
+              {!achievementsLoading && earnedBadges && earnedBadges.length > 0 && (
                 earnedBadges.map((badge) => (
                   <li key={badge.type} className="achievement-li">
                     <FaArrowTrendUp style={{ marginRight: "8px", color: "#FFD700" }} />
@@ -670,40 +780,43 @@ function Dashboard() {
                   </li>
                 ))
               )}
-              
-              {/* Display recent achievements from other students */}
-              {recentAchievements && recentAchievements.length > 0 ? (
-                recentAchievements.slice(0, 2).map((ach) => (
+
+              {/* Display user's own achievements */}
+              {!achievementsLoading && achievements && achievements.length > 0 ? (
+                achievements.slice(0, 3).map((ach) => (
                   <li key={ach._id} className="achievement-li">
-                    <FaArrowTrendUp style={{ marginRight: "8px" }} />
+                    <FaArrowTrendUp style={{ marginRight: "8px", color: "#3B82F6" }} />
                     <div>
                       <h4 className="achievement fw-normal">{ach.title}</h4>
                       <p className="achievement-p">
-                        {ach.user?.fullName || 'Student'} - {ach.description || 'Achievement earned'}
+                        {ach.description || 'Achievement earned'} 
+                        {ach.points && ` • +${ach.points} points`}
                       </p>
+                      {ach.course && (
+                        <p style={{ fontSize: '12px', color: '#9CA3AF', margin: '4px 0 0 0' }}>
+                          {ach.course?.title}
+                        </p>
+                      )}
                     </div>
                   </li>
                 ))
-              ) : (
-                // Fallback if no recent achievements
-                earnedBadges.length === 0 && (
+              ) : !achievementsLoading && !achievementsError && (
+                // Show empty state or suggestions if no achievements yet
+                earnedBadges.length === 0 && achievements.length === 0 && (
                   <>
-                    <li className="achievement-li">
-                      <FaArrowTrendUp style={{ marginRight: "8px" }} />
-                      <div>
-                        <h4 className="achievement fw-normal">Keep Learning</h4>
-                        <p className="achievement-p">Complete 5 courses in 30 days to earn Fast Learner badge</p>
-                      </div>
-                    </li>
-                    <li className="achievement-li">
-                      <LuClock4 style={{ marginRight: "8px" }} />
-                      <div>
-                        <h4 className="achievement fw-normal">Complete Courses</h4>
-                        <p className="achievement-p">Complete all courses to earn Perfect Attendance badge</p>
-                      </div>
+                    <li className="achievement-li" style={{ textAlign: 'center', padding: '20px', color: '#758096' }}>
+                      <p style={{ fontSize: '14px', margin: '0 0 10px 0' }}>No achievements yet.</p>
+                      <p style={{ fontSize: '12px', margin: 0 }}>Complete courses and assessments to earn achievements!</p>
                     </li>
                   </>
                 )
+              )}
+
+              {/* Show motivation if user has badges but no achievements */}
+              {!achievementsLoading && earnedBadges.length > 0 && achievements.length === 0 && (
+                <li className="achievement-li" style={{ textAlign: 'center', padding: '20px', color: '#758096' }}>
+                  <p style={{ fontSize: '12px', margin: 0 }}>Keep learning to earn more achievements!</p>
+                </li>
               )}
             </ul>
           </div>
