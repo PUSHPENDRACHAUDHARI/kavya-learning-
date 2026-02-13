@@ -1,6 +1,7 @@
 const User = require('../models/userModel');
 const Course = require('../models/courseModel');
 const Achievement = require('../models/achievementModel');
+const notificationController = require('./notificationController');
 const Lesson = require('../models/lessonModel');
 
 // @desc    Get student dashboard data
@@ -160,19 +161,44 @@ exports.completeLesson = async (req, res) => {
     const completedCount = enrollment.completedLessons.length;
     enrollment.completionPercentage = Math.round((completedCount / totalLessons) * 100);
 
-    // If course completed, create achievement
-    if (enrollment.completionPercentage === 100 && !enrollment.certificateDownloadedAt) {
-      const achievement = await Achievement.create({
-        user: student._id,
-        title: `${course.title} Completed`,
-        description: `Successfully completed ${course.title}`,
-        type: 'Course Completion',
-        course: courseId,
-        points: 100
-      });
+    // If course completed, create achievement (avoid duplicates)
+    if (enrollment.completionPercentage === 100) {
+      const existing = await Achievement.findOne({ user: student._id, course: courseId, type: 'Course Completion' });
+      if (!existing) {
+        const achievement = await Achievement.create({
+          user: student._id,
+          title: `${course.title} Completed`,
+          description: `Successfully completed ${course.title}`,
+          type: 'Course Completion',
+          course: courseId,
+          points: 100
+        });
 
-      if (!student.achievements.includes(achievement._id)) {
-        student.achievements.push(achievement._id);
+        if (!student.achievements.includes(achievement._id)) {
+          student.achievements.push(achievement._id);
+        }
+
+        // Create a notification for the user
+        try {
+          await notificationController.createNotification(
+            student._id,
+            'Achievement Unlocked',
+            `You completed ${course.title}`,
+            'achievement',
+            '/student/achievements'
+          );
+        } catch (err) {
+          console.error('Failed to create notification for achievement', err);
+        }
+
+        // Emit real-time event if socket server is available
+        try {
+          if (global.io) {
+            global.io.to(student._id.toString()).emit('achievementCreated', achievement);
+          }
+        } catch (err) {
+          console.error('Socket emit error for achievement', err);
+        }
       }
     }
 

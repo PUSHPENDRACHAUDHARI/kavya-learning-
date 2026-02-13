@@ -2,6 +2,8 @@ const Enrollment = require('../models/enrollmentModel');
 const Payment = require('../models/paymentModel');
 const Course = require('../models/courseModel');
 const User = require('../models/userModel');
+const Achievement = require('../models/achievementModel');
+const notificationController = require('./notificationController');
 
 // @desc    Create a pending enrollment (before payment)
 // @route   POST /api/enrollments/create
@@ -201,9 +203,50 @@ exports.updateEnrollment = async (req, res) => {
         }
         enrollment.lastAccessed = new Date();
 
-        await enrollment.save();
+                await enrollment.save();
 
-        res.json(enrollment);
+                // If this update marked the enrollment as completed, create an achievement
+                const completedNow = (completed === true) || (progressPercentage >= 100) || enrollment.enrollmentStatus === 'completed';
+                if (completedNow) {
+                    try {
+                        const existing = await Achievement.findOne({ user: req.user._id, course: enrollment.courseId, type: 'Course Completion' });
+                        if (!existing) {
+                            const course = await Course.findById(enrollment.courseId);
+                            const achievement = await Achievement.create({
+                                user: req.user._id,
+                                title: `${(course && course.title) || 'Course'} Completed`,
+                                description: `Successfully completed ${(course && course.title) || 'the course'}`,
+                                type: 'Course Completion',
+                                course: enrollment.courseId,
+                                points: 100
+                            });
+
+                            // Attach to user record
+                            const user = await User.findById(req.user._id);
+                            if (user && !user.achievements.includes(achievement._id)) {
+                                user.achievements.push(achievement._id);
+                                await user.save();
+                            }
+
+                            // Create notification and emit socket event
+                            try {
+                                await notificationController.createNotification(req.user._id, 'Achievement Unlocked', `You completed ${(course && course.title) || 'a course'}`, 'achievement', '/student/achievements');
+                            } catch (err) {
+                                console.error('Failed to create notification for achievement', err);
+                            }
+
+                            try {
+                                if (global.io) global.io.to(req.user._id.toString()).emit('achievementCreated', achievement);
+                            } catch (err) {
+                                console.error('Socket emit error for achievement', err);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error handling achievement creation on enrollment completion', err);
+                    }
+                }
+
+                res.json(enrollment);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }

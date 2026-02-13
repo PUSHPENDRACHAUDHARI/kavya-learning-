@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { io as ioClient } from 'socket.io-client';
 import axiosClient from '../../api/axiosClient';
 import AppLayout from '../../components/AppLayout';
 import './StudentAchievements.css';
@@ -9,6 +10,38 @@ const StudentAchievements = () => {
 
   useEffect(() => {
     loadAchievements();
+    let socket;
+
+    async function initSocket() {
+      try {
+        // Get current user id from profile endpoint
+        const profileRes = await axiosClient.get('/api/users/profile');
+        const userId = profileRes.data._id;
+        if (!userId) return;
+
+        socket = ioClient(import.meta.env.VITE_API_BASE_URL || '', {
+          path: '/socket.io',
+          transports: ['websocket']
+        });
+
+        socket.on('connect', () => {
+          socket.emit('join', userId);
+        });
+
+        socket.on('achievementCreated', (achievement) => {
+          // reload achievements when the server notifies of a new achievement
+          loadAchievements();
+        });
+      } catch (err) {
+        console.warn('Socket init failed', err);
+      }
+    }
+
+    initSocket();
+
+    return () => {
+      if (socket) socket.disconnect();
+    };
   }, []);
 
   const loadAchievements = async () => {
