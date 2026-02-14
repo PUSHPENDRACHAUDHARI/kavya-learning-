@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../assets/leaderboard.css";
 import AppLayout from "../components/AppLayout";
+import api from "../utils/api";
 
 export default function Leaderboard() {
   const [activeTab, setActiveTab] = useState("Overall");
@@ -39,7 +40,6 @@ export default function Leaderboard() {
   const [error, setError] = useState(null);
 
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
 
   const interactiveStyle = {
     transition: "all 0.3s ease-in-out",
@@ -102,46 +102,25 @@ export default function Leaderboard() {
       setError(null);
       try {
         // Fetch full leaderboard
-        const leaderboardRes = await fetch("/api/achievements/leaderboard", {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : undefined,
-          },
-        });
-
-        if (!leaderboardRes.ok) {
-          throw new Error("Failed to fetch leaderboard");
-        }
-
-        const leaderboardData = await leaderboardRes.json();
+        const leaderboardData = await api.get('/achievements/leaderboard');
         setLeaderboard(
           leaderboardData.leaderboard ? leaderboardData.leaderboard : []
         );
 
         // Fetch my ranking
-        const myRankRes = await fetch("/api/achievements/my-ranking", {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : undefined,
-          },
-        });
-
-        if (myRankRes.ok) {
-          const myRankData = await myRankRes.json();
+        try {
+          const myRankData = await api.get('/achievements/my-ranking');
           setMyRank(myRankData);
+        } catch (e) {
+          console.warn('Error fetching my-ranking', e.message);
         }
 
         // Fetch my achievements
-        const achievementsRes = await fetch("/api/achievements/my-achievements", {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : undefined,
-          },
-        });
-
-        if (achievementsRes.ok) {
-          const achievementsData = await achievementsRes.json();
+        try {
+          const achievementsData = await api.get('/achievements/my-achievements');
           setMyAchievements(Array.isArray(achievementsData) ? achievementsData : []);
+        } catch (e) {
+          console.warn('Error fetching my-achievements', e.message);
         }
 
         // Load weekly challenges and progress
@@ -155,37 +134,28 @@ export default function Leaderboard() {
 
     const loadWeeklyChallenges = async () => {
       try {
-        // Fetch student dashboard for hours studied
-        const dashboardRes = await fetch("/api/student/dashboard", {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : undefined,
-          },
-        });
+        const dashboardData = await api.get('/student/dashboard');
+        const overview = dashboardData.data?.overview || dashboardData.overview;
 
-        if (dashboardRes.ok) {
-          const dashboardData = await dashboardRes.json();
-          const overview = dashboardData.data?.overview || dashboardData.overview;
-
-          setWeeklyChallenges((prev) => ({
-            ...prev,
-            coursesCompleted: overview?.completedCourses || 0,
-            hoursStudied: overview?.totalStudyHours || 0,
-          }));
-        }
+        setWeeklyChallenges((prev) => ({
+          ...prev,
+          coursesCompleted: overview?.completedCourses || 0,
+          hoursStudied: overview?.totalStudyHours || 0,
+        }));
       } catch (err) {
-        console.error("Error loading weekly challenges:", err);
+        console.error('Error loading weekly challenges:', err.message || err);
       }
     };
 
+    const token = localStorage.getItem('token');
     if (token) {
       loadLeaderboardData();
-      
+
       // Set up auto-refresh every 30 seconds
       const refreshInterval = setInterval(loadLeaderboardData, 30000);
       return () => clearInterval(refreshInterval);
     }
-  }, [token]);
+  }, []);
 
   const getRankColor = (rank) => {
     switch (rank) {
@@ -251,8 +221,8 @@ export default function Leaderboard() {
                     <div
                       key={item.rank}
                       className={`podium-item podium-rank-${item.rank}`}
-                      onClick={() => navigate("/profile", { state: { user: item.userId } })}
-                      style={{ cursor: "pointer" }}
+                      onClick={() => navigate('/profile', { state: { user: item.userId } })}
+                      style={{ cursor: 'pointer' }}
                     >
                       <div
                         className="podium-avatar"
@@ -321,7 +291,7 @@ export default function Leaderboard() {
                       }
                       onClick={() => {
                         setSelectedRank(item.rank);
-                        navigate("/profile", { state: { user: item.userId } });
+                        navigate('/profile', { state: { user: item.userId } });
                       }}
                     >
                       <div className="ranking-rank">{item.rank}</div>
@@ -339,12 +309,12 @@ export default function Leaderboard() {
                         <div className="ranking-name">{item.name}</div>
 
                         <div className="ranking-stats">
-                          {item.coursesCompleted || 0} courses ·{" "}
+                          {item.coursesCompleted || 0} courses ·{' '}
                           {item.averageScore || 0}% avg ·
                           <Flame
                             size={14}
                             style={{ color: "#ef4444", marginLeft: "4px" }}
-                          />{" "}
+                          />{' '}
                           {item.streakDays || 0} day streak
                         </div>
                       </div>
@@ -573,4 +543,3 @@ export default function Leaderboard() {
     </AppLayout>
   );
 }
-
