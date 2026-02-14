@@ -3,20 +3,16 @@ pipeline {
 
     environment {
         PROJECT_DIR = "/root/kavya-learn"
-        REPO_URL = "https://github.com/adityamahajan785/kavya-learn.git"
     }
 
     stages {
 
-        stage('Clone / Pull Repository') {
+        stage('Pull Latest Code') {
             steps {
                 sh '''
-                if [ -d "$PROJECT_DIR" ]; then
-                    cd $PROJECT_DIR
-                    git pull origin main
-                else
-                    git clone $REPO_URL $PROJECT_DIR
-                fi
+                cd $PROJECT_DIR
+                git checkout master
+                git pull origin master
                 '''
             }
         }
@@ -25,7 +21,7 @@ pipeline {
             steps {
                 sh '''
                 cd $PROJECT_DIR
-                docker compose down || true
+                docker compose down
                 '''
             }
         }
@@ -46,4 +42,3 @@ pipeline {
         }
     }
 }
-
